@@ -3,6 +3,8 @@ using Microsoft.Xna.Framework;
 namespace Pokefarm.Game;
 
 internal sealed record SpawnedPokemon(
+    int PokemonId,
+    string SpeciesName,
     Vector2 Position,
     Direction Direction,
     float MoveCooldownRemaining,
@@ -10,5 +12,6 @@ internal sealed record SpawnedPokemon(
     Vector2 MoveTarget = default,
     float MoveTimeRemaining = 0f,
     bool IsFollowingPlayer = false,
+    Vector2? HomePosition = null,
     string? SpeechText = null,
     float SpeechTimerRemaining = 0f);
