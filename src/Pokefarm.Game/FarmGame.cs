@@ -29,6 +29,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private const float SpawnedPokemonMoveDistance = 32f;
     private const float FollowStopDistance = 56f;
     private const float HomeWanderRadius = 96f;
+    private const float DialogueGameplayShift = 120f;
     private const float SpawnedPokemonMinMoveDelay = 2f;
     private const float SpawnedPokemonMaxMoveDelay = 4f;
     private const float SpawnedPokemonMoveDuration = 0.3f;
@@ -368,7 +369,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             0f,
             maxCameraY);
 
-        _cameraMatrix = Matrix.CreateTranslation(-cameraX, -cameraY, 0f);
+        float dialogueShift = _inputMode == InputMode.Talking ? DialogueGameplayShift : 0f;
+        _cameraMatrix = Matrix.CreateTranslation(-cameraX, -cameraY - dialogueShift, 0f);
     }
 
     private void DrawFarm()
@@ -771,10 +773,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         Viewport viewport = GraphicsDevice.Viewport;
-        Rectangle panel = new(36, viewport.Height - 210, viewport.Width - 72, 174);
-        Rectangle iconPanel = new(panel.X + 18, panel.Y + 20, 112, 112);
-        Rectangle textPanel = new(iconPanel.Right + 18, panel.Y + 20, panel.Width - 112 - 220 - 72, 112);
-        Rectangle optionsPanel = new(textPanel.Right + 18, panel.Y + 20, 160, 112);
+        Rectangle panel = new(36, viewport.Height - 137, viewport.Width - 72, 127);
+        Rectangle iconPanel = new(panel.X + 18, panel.Y + 22, 97, 97);
+        Rectangle textPanel = new(iconPanel.Right + 18, panel.Y + 22, panel.Width - 97 - 205 - 72, 97);
+        Rectangle optionsPanel = new(textPanel.Right + 18, panel.Y + 22, 145, 97);
         string[] options = ["FOLLOW ME", "BYE"];
 
         _spriteBatch.Draw(_pixel, panel, new Color(44, 31, 23, 245));
@@ -783,9 +785,9 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, iconPanel, new Color(58, 43, 33));
         DrawPanelBorder(iconPanel, new Color(120, 90, 65));
-        _spriteBatch.Draw(_circleTexture ?? _pixel, new Rectangle(iconPanel.X + 24, iconPanel.Y + 20, 64, 64), new Color(178, 208, 118));
-        DrawPanelBorder(new Rectangle(iconPanel.X + 24, iconPanel.Y + 20, 64, 64), new Color(236, 220, 196));
-        DrawPixelText("ICON", new Vector2(iconPanel.X + 28, iconPanel.Bottom - 22), new Color(236, 220, 196));
+        _spriteBatch.Draw(_circleTexture ?? _pixel, new Rectangle(iconPanel.X + 17, iconPanel.Y + 13, 64, 64), new Color(178, 208, 118));
+        DrawPanelBorder(new Rectangle(iconPanel.X + 17, iconPanel.Y + 13, 64, 64), new Color(236, 220, 196));
+        DrawPixelText("ICON", new Vector2(iconPanel.X + 21, iconPanel.Bottom - 22), new Color(236, 220, 196));
 
         _spriteBatch.Draw(_pixel, textPanel, new Color(58, 43, 33));
         DrawPanelBorder(textPanel, new Color(120, 90, 65));
@@ -793,16 +795,16 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, optionsPanel, new Color(58, 43, 33));
         DrawPanelBorder(optionsPanel, new Color(120, 90, 65));
-        DrawPixelText("YOU SAY", new Vector2(optionsPanel.X + 18, optionsPanel.Y + 10), new Color(236, 220, 196));
+        DrawPixelText("YOU SAY", new Vector2(optionsPanel.X + 12, optionsPanel.Y + 8), new Color(236, 220, 196));
 
         for (int index = 0; index < options.Length; index++)
         {
-            Rectangle optionBounds = new(optionsPanel.X + 14, optionsPanel.Y + 34 + (index * 32), optionsPanel.Width - 28, 24);
+            Rectangle optionBounds = new(optionsPanel.X + 10, optionsPanel.Y + 30 + (index * 26), optionsPanel.Width - 20, 20);
             bool selected = index == _selectedTalkOption;
 
             _spriteBatch.Draw(_pixel, optionBounds, selected ? new Color(88, 66, 49) : new Color(58, 43, 33));
             DrawPanelBorder(optionBounds, selected ? Color.Gold : new Color(120, 90, 65));
-            DrawPixelText(options[index], new Vector2(optionBounds.X + 10, optionBounds.Y + 6), new Color(236, 220, 196));
+            DrawPixelText(options[index], new Vector2(optionBounds.X + 8, optionBounds.Y + 4), new Color(236, 220, 196));
         }
     }
 
