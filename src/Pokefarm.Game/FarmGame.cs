@@ -75,6 +75,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private int _walkAnimationFrame;
     private int _selectedCraftingIndex;
     private int _selectedTalkOption;
+    private string _activeTalkText = "HI!";
     private CraftingSource _activeCraftingSource = CraftingSource.HandheldCrafting;
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
@@ -442,7 +443,6 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         foreach (SpawnedPokemon pokemon in _spawnedDittos)
         {
             DrawPokemonAt(pokemon.Position, _spawnedPokemonSpriteSheet, _spawnedPokemonFrames, pokemon.Direction);
-            DrawPokemonSpeech(pokemon);
         }
     }
 
@@ -771,44 +771,39 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         Viewport viewport = GraphicsDevice.Viewport;
-        Rectangle panel = new(viewport.Width / 2 - 150, viewport.Height / 2 - 90, 300, 180);
+        Rectangle panel = new(36, viewport.Height - 210, viewport.Width - 72, 174);
+        Rectangle iconPanel = new(panel.X + 18, panel.Y + 20, 112, 112);
+        Rectangle textPanel = new(iconPanel.Right + 18, panel.Y + 20, panel.Width - 112 - 220 - 72, 112);
+        Rectangle optionsPanel = new(textPanel.Right + 18, panel.Y + 20, 160, 112);
         string[] options = ["FOLLOW ME", "BYE"];
 
         _spriteBatch.Draw(_pixel, panel, new Color(44, 31, 23, 245));
         DrawPanelBorder(panel, new Color(181, 138, 95));
-        DrawPixelText("TALK", new Vector2(panel.X + 20, panel.Y + 18), new Color(236, 220, 196));
+        DrawPixelText("TALK", new Vector2(panel.X + 18, panel.Y - 22), new Color(236, 220, 196));
+
+        _spriteBatch.Draw(_pixel, iconPanel, new Color(58, 43, 33));
+        DrawPanelBorder(iconPanel, new Color(120, 90, 65));
+        _spriteBatch.Draw(_circleTexture ?? _pixel, new Rectangle(iconPanel.X + 24, iconPanel.Y + 20, 64, 64), new Color(178, 208, 118));
+        DrawPanelBorder(new Rectangle(iconPanel.X + 24, iconPanel.Y + 20, 64, 64), new Color(236, 220, 196));
+        DrawPixelText("ICON", new Vector2(iconPanel.X + 28, iconPanel.Bottom - 22), new Color(236, 220, 196));
+
+        _spriteBatch.Draw(_pixel, textPanel, new Color(58, 43, 33));
+        DrawPanelBorder(textPanel, new Color(120, 90, 65));
+        DrawPixelText(_activeTalkText, new Vector2(textPanel.X + 16, textPanel.Y + 18), new Color(236, 220, 196));
+
+        _spriteBatch.Draw(_pixel, optionsPanel, new Color(58, 43, 33));
+        DrawPanelBorder(optionsPanel, new Color(120, 90, 65));
+        DrawPixelText("YOU SAY", new Vector2(optionsPanel.X + 18, optionsPanel.Y + 10), new Color(236, 220, 196));
 
         for (int index = 0; index < options.Length; index++)
         {
-            Rectangle optionBounds = new(panel.X + 20, panel.Y + 56 + (index * 46), panel.Width - 40, 34);
+            Rectangle optionBounds = new(optionsPanel.X + 14, optionsPanel.Y + 34 + (index * 32), optionsPanel.Width - 28, 24);
             bool selected = index == _selectedTalkOption;
 
             _spriteBatch.Draw(_pixel, optionBounds, selected ? new Color(88, 66, 49) : new Color(58, 43, 33));
             DrawPanelBorder(optionBounds, selected ? Color.Gold : new Color(120, 90, 65));
-            DrawPixelText(options[index], new Vector2(optionBounds.X + 12, optionBounds.Y + 10), new Color(236, 220, 196));
+            DrawPixelText(options[index], new Vector2(optionBounds.X + 10, optionBounds.Y + 6), new Color(236, 220, 196));
         }
-    }
-
-    private void DrawPokemonSpeech(SpawnedPokemon pokemon)
-    {
-        if (_spriteBatch is null || _pixel is null || string.IsNullOrEmpty(pokemon.SpeechText))
-        {
-            return;
-        }
-
-        Point textSize = MeasurePixelText(pokemon.SpeechText, UiFontPixelSize, UiFontSpacing);
-        Point center = new(
-            (int)pokemon.Position.X + (PlayerSize / 2),
-            (int)pokemon.Position.Y - 14);
-        Rectangle panel = new(
-            center.X - (textSize.X / 2) - 10,
-            center.Y - textSize.Y - 10,
-            textSize.X + 20,
-            textSize.Y + 14);
-
-        _spriteBatch.Draw(_pixel, panel, new Color(252, 246, 228, 235));
-        DrawPanelBorder(panel, new Color(92, 72, 52));
-        DrawPixelText(pokemon.SpeechText, new Vector2(panel.X + 10, panel.Y + 7), new Color(52, 36, 24));
     }
 
     private void DrawPromptPanel(string text, Point center)
@@ -1529,14 +1524,9 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        SpawnedPokemon pokemon = _spawnedDittos[_talkTargetIndex];
-        _spawnedDittos[_talkTargetIndex] = pokemon with
-        {
-            SpeechText = "HI!",
-            SpeechTimerRemaining = InteractionMessageDuration
-        };
         _activeTalkPokemonIndex = _talkTargetIndex;
         _selectedTalkOption = 0;
+        _activeTalkText = "HI!";
         _inputMode = InputMode.Talking;
     }
 
@@ -1733,9 +1723,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                 MoveCooldownRemaining = 0f,
                 IsMoving = false,
                 MoveTimeRemaining = 0f,
-                MoveTarget = pokemon.Position,
-                SpeechText = "HI!",
-                SpeechTimerRemaining = InteractionMessageDuration
+                MoveTarget = pokemon.Position
             };
             ExitTalkMode();
             return;
@@ -1749,6 +1737,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _inputMode = InputMode.Gameplay;
         _activeTalkPokemonIndex = -1;
         _selectedTalkOption = 0;
+        _activeTalkText = "HI!";
     }
 
     private Point GetRemovalSelectorSize()
