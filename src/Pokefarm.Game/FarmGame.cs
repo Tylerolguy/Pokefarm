@@ -27,6 +27,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private const float InteractionMessageDuration = 2f;
     private const double SnackLifetimeSeconds = 2d;
     private const float SpawnedPokemonMoveDistance = 32f;
+    private const float FollowStopDistance = 56f;
+    private const float HomeWanderRadius = 96f;
     private const float SpawnedPokemonMinMoveDelay = 2f;
     private const float SpawnedPokemonMaxMoveDelay = 4f;
     private const float SpawnedPokemonMoveDuration = 0.3f;
@@ -37,7 +39,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private readonly List<SpawnedPokemon> _spawnedDittos = [];
     private readonly List<InventoryEntry> _inventoryItems =
     [
-        new(ItemCatalog.Barn, 1),
+        new(ItemCatalog.Bed, 3),
         new(ItemCatalog.WorkBench, 1),
         new(ItemCatalog.BasicSnack, 2),
         new(ItemCatalog.Planter, 1),
@@ -77,6 +79,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
     private string? _interactionMessage;
+    private int _nextPokemonId = 1;
     private Dictionary<string, SpriteFrame> _playerFrames = [];
     private Dictionary<string, SpriteFrame> _spawnedPokemonFrames = [];
     private static readonly Dictionary<char, string[]> PixelFont = new()
@@ -583,9 +586,11 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             DrawPanelBorder(rowBounds, selected ? Color.Gold : new Color(120, 90, 65));
 
             DrawPixelText(recipe.Output.Name.ToUpperInvariant(), new Vector2(rowBounds.X + 16, rowBounds.Y + 12), new Color(236, 220, 196));
+            string inventoryText = $"IN INVENTORY {GetInventoryQuantity(recipe.Output)}";
+            Point inventoryTextSize = MeasurePixelText(inventoryText);
             DrawPixelText(
-                $"In Inventory {GetInventoryQuantity(recipe.Output)}",
-                new Vector2(rowBounds.Right - 118, rowBounds.Y + 12),
+                inventoryText,
+                new Vector2(rowBounds.Right - inventoryTextSize.X - 16, rowBounds.Y + 12),
                 new Color(210, 190, 164));
 
             for (int costIndex = 0; costIndex < recipe.Costs.Count; costIndex++)
@@ -742,6 +747,11 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             DrawPromptPanel("PRESS Q", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 104));
         }
 
+        if (_interactTarget?.Definition == ItemCatalog.Bed && !string.IsNullOrEmpty(_interactTarget.ResidentPokemonName))
+        {
+            DrawPromptPanel($"{_interactTarget.ResidentPokemonName!.ToUpperInvariant()} LIVES HERE", new Point(GraphicsDevice.Viewport.Width / 2, 48));
+        }
+
         if (_interactTarget is not null)
         {
             DrawPromptPanel("PRESS E", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
@@ -891,6 +901,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                 item.Bounds.Center.X - (PlayerSize / 2f),
                 item.Bounds.Center.Y - (PlayerSize / 2f));
             _spawnedDittos.Add(new SpawnedPokemon(
+                _nextPokemonId++,
+                "Sewaddle",
                 spawnPosition,
                 Direction.Down,
                 GetRandomMoveDelaySeconds()));
@@ -970,7 +982,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         if (pokemon.IsFollowingPlayer)
         {
             Vector2 toPlayer = _playerPosition - pokemon.Position;
-            if (toPlayer.LengthSquared() <= SpawnedPokemonMoveDistance * SpawnedPokemonMoveDistance)
+            if (toPlayer.LengthSquared() <= FollowStopDistance * FollowStopDistance)
             {
                 return pokemon;
             }
@@ -978,7 +990,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         Direction[] directions = pokemon.IsFollowingPlayer
             ? GetFollowDirectionsTowardPlayer(pokemon.Position)
-            : [(Direction)Random.Shared.Next(0, 4)];
+            : GetPokemonWanderDirections(pokemon);
 
         foreach (Direction direction in directions)
         {
@@ -1000,7 +1012,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                 _worldBounds.Width - (BorderThickness * 2),
                 _worldBounds.Height - (BorderThickness * 2));
 
-            if (!playableArea.Contains(candidateBounds) || CollidesWithPlacedItem(candidatePosition) || CollidesWithSpawnedPokemon(candidateBounds, pokemonIndex))
+            if (!playableArea.Contains(candidateBounds) ||
+                CollidesWithPlacedItem(candidatePosition) ||
+                CollidesWithSpawnedPokemon(candidateBounds, pokemonIndex) ||
+                IsOutsideHomeRange(pokemon, candidatePosition))
             {
                 continue;
             }
@@ -1096,6 +1111,60 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private Direction[] GetFollowDirectionsTowardPlayer(Vector2 pokemonPosition)
     {
         Vector2 delta = _playerPosition - pokemonPosition;
+        Direction horizontal = delta.X < 0f ? Direction.Left : Direction.Right;
+        Direction vertical = delta.Y < 0f ? Direction.Up : Direction.Down;
+
+        if (MathF.Abs(delta.X) > MathF.Abs(delta.Y))
+        {
+            return [horizontal, vertical];
+        }
+
+        return [vertical, horizontal];
+    }
+
+    private Direction[] GetPokemonWanderDirections(SpawnedPokemon pokemon)
+    {
+        if (pokemon.HomePosition is Vector2 homePosition)
+        {
+            Vector2 toHome = homePosition - pokemon.Position;
+            if (toHome.LengthSquared() > HomeWanderRadius * HomeWanderRadius)
+            {
+                return GetDirectionsTowardTarget(pokemon.Position, homePosition);
+            }
+        }
+
+        Direction[] directions = [Direction.Down, Direction.Left, Direction.Up, Direction.Right];
+        for (int index = directions.Length - 1; index > 0; index--)
+        {
+            int swapIndex = Random.Shared.Next(index + 1);
+            (directions[index], directions[swapIndex]) = (directions[swapIndex], directions[index]);
+        }
+
+        return directions;
+    }
+
+    private bool IsOutsideHomeRange(SpawnedPokemon pokemon, Vector2 candidatePosition)
+    {
+        if (pokemon.HomePosition is not Vector2 homePosition)
+        {
+            return false;
+        }
+
+        float radiusSquared = HomeWanderRadius * HomeWanderRadius;
+        float currentDistanceSquared = Vector2.DistanceSquared(pokemon.Position, homePosition);
+        float candidateDistanceSquared = Vector2.DistanceSquared(candidatePosition, homePosition);
+
+        if (currentDistanceSquared > radiusSquared)
+        {
+            return candidateDistanceSquared >= currentDistanceSquared;
+        }
+
+        return candidateDistanceSquared > radiusSquared;
+    }
+
+    private Direction[] GetDirectionsTowardTarget(Vector2 startPosition, Vector2 targetPosition)
+    {
+        Vector2 delta = targetPosition - startPosition;
         Direction horizontal = delta.X < 0f ? Direction.Left : Direction.Right;
         Direction vertical = delta.Y < 0f ? Direction.Up : Direction.Down;
 
@@ -1442,6 +1511,12 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (_interactTarget.Definition == ItemCatalog.Bed)
+        {
+            InteractWithBed();
+            return;
+        }
+
         string message = _interactTarget.Definition.InteractionMessage ?? $"{_interactTarget.Definition.Name.ToUpperInvariant()} READY";
         _interactionMessage = message.ToUpperInvariant();
         _interactionMessageTimer = InteractionMessageDuration;
@@ -1484,7 +1559,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (PlacedItem item in _placedItems)
         {
-            if (!item.Definition.IsInteractable)
+            if (!item.Definition.IsInteractable && item.Definition != ItemCatalog.Bed)
             {
                 continue;
             }
@@ -1496,6 +1571,109 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         return null;
+    }
+
+    private void InteractWithBed()
+    {
+        if (_interactTarget is null || _interactTarget.Definition != ItemCatalog.Bed)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(_interactTarget.ResidentPokemonName))
+        {
+            _interactionMessage = $"{_interactTarget.ResidentPokemonName!.ToUpperInvariant()} LIVES HERE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        int residentIndex = FindPokemonToAssignToBed(_interactTarget);
+        if (residentIndex < 0)
+        {
+            _interactionMessage = "NO POKEMON READY";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[residentIndex];
+        Vector2 homePosition = GetBedHomePosition(_interactTarget);
+        _spawnedDittos[residentIndex] = pokemon with
+        {
+            IsFollowingPlayer = false,
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveTarget = pokemon.Position,
+            HomePosition = homePosition,
+            SpeechText = "HOME!",
+            SpeechTimerRemaining = InteractionMessageDuration
+        };
+
+        ClearExistingBedForPokemon(pokemon.PokemonId);
+
+        int bedIndex = _placedItems.FindIndex(item => item == _interactTarget);
+        if (bedIndex >= 0)
+        {
+            PlacedItem bed = _placedItems[bedIndex];
+            _placedItems[bedIndex] = bed with
+            {
+                ResidentPokemonName = pokemon.SpeciesName,
+                ResidentPokemonId = pokemon.PokemonId
+            };
+            _interactTarget = _placedItems[bedIndex];
+        }
+
+        _interactionMessage = $"{pokemon.SpeciesName.ToUpperInvariant()} MOVED IN";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private int FindPokemonToAssignToBed(PlacedItem bed)
+    {
+        int residentIndex = -1;
+        float nearestDistanceSquared = float.MaxValue;
+        for (int index = 0; index < _spawnedDittos.Count; index++)
+        {
+            SpawnedPokemon pokemon = _spawnedDittos[index];
+            if (!pokemon.IsFollowingPlayer)
+            {
+                continue;
+            }
+
+            float distanceSquared = Vector2.DistanceSquared(pokemon.Position, _playerPosition);
+            if (distanceSquared >= nearestDistanceSquared)
+            {
+                continue;
+            }
+
+            nearestDistanceSquared = distanceSquared;
+            residentIndex = index;
+        }
+
+        return residentIndex;
+    }
+
+    private void ClearExistingBedForPokemon(int pokemonId)
+    {
+        for (int index = 0; index < _placedItems.Count; index++)
+        {
+            PlacedItem item = _placedItems[index];
+            if (item.Definition != ItemCatalog.Bed || item.ResidentPokemonId != pokemonId)
+            {
+                continue;
+            }
+
+            _placedItems[index] = item with
+            {
+                ResidentPokemonName = null,
+                ResidentPokemonId = null
+            };
+        }
+    }
+
+    private static Vector2 GetBedHomePosition(PlacedItem bed)
+    {
+        return new Vector2(
+            bed.Bounds.Center.X - (PlayerSize / 2f),
+            bed.Bounds.Center.Y - (PlayerSize / 2f));
     }
 
     private int FindNearbyPokemonTargetIndex()
