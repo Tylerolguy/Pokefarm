@@ -4,7 +4,7 @@ namespace Pokefarm.Game;
 
 internal sealed record SpawnedPokemon(
     int PokemonId,
-    string SpeciesName,
+    string Name,
     Vector2 Position,
     Direction Direction,
     float MoveCooldownRemaining,
