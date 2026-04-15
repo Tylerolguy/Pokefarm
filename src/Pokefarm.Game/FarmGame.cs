@@ -917,6 +917,19 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         for (int index = 0; index < _spawnedDittos.Count; index++)
         {
             SpawnedPokemon pokemon = _spawnedDittos[index];
+            if (_inputMode == InputMode.Talking && index == _activeTalkPokemonIndex)
+            {
+                Direction facePlayerDirection = GetDirectionTowardTarget(pokemon.Position, _playerPosition);
+                _spawnedDittos[index] = pokemon with
+                {
+                    Direction = facePlayerDirection,
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveTarget = pokemon.Position
+                };
+                continue;
+            }
+
             if (pokemon.SpeechTimerRemaining > 0f)
             {
                 float speechTimeRemaining = pokemon.SpeechTimerRemaining - deltaTime;
@@ -1091,18 +1104,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
     private Direction GetDirectionTowardPlayer(Vector2 pokemonPosition)
     {
-        Vector2 delta = _playerPosition - pokemonPosition;
-        if (delta == Vector2.Zero)
-        {
-            return Direction.Down;
-        }
-
-        if (MathF.Abs(delta.X) > MathF.Abs(delta.Y))
-        {
-            return delta.X < 0f ? Direction.Left : Direction.Right;
-        }
-
-        return delta.Y < 0f ? Direction.Up : Direction.Down;
+        return GetDirectionTowardTarget(pokemonPosition, _playerPosition);
     }
 
     private Direction[] GetFollowDirectionsTowardPlayer(Vector2 pokemonPosition)
@@ -1526,6 +1528,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        FaceConversationTarget(_spawnedDittos[_talkTargetIndex].Position);
+        FacePokemonTowardPlayer(_talkTargetIndex);
         _activeTalkPokemonIndex = _talkTargetIndex;
         _selectedTalkOption = 0;
         _activeTalkText = "HI!";
@@ -1740,6 +1744,44 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _activeTalkPokemonIndex = -1;
         _selectedTalkOption = 0;
         _activeTalkText = "HI!";
+    }
+
+    private void FaceConversationTarget(Vector2 targetPosition)
+    {
+        _playerDirection = GetDirectionTowardTarget(_playerPosition, targetPosition);
+    }
+
+    private void FacePokemonTowardPlayer(int pokemonIndex)
+    {
+        if (pokemonIndex < 0 || pokemonIndex >= _spawnedDittos.Count)
+        {
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            Direction = GetDirectionTowardTarget(pokemon.Position, _playerPosition),
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveTarget = pokemon.Position
+        };
+    }
+
+    private static Direction GetDirectionTowardTarget(Vector2 sourcePosition, Vector2 targetPosition)
+    {
+        Vector2 delta = targetPosition - sourcePosition;
+        if (delta == Vector2.Zero)
+        {
+            return Direction.Down;
+        }
+
+        if (MathF.Abs(delta.X) > MathF.Abs(delta.Y))
+        {
+            return delta.X < 0f ? Direction.Left : Direction.Right;
+        }
+
+        return delta.Y < 0f ? Direction.Up : Direction.Down;
     }
 
     private Point GetRemovalSelectorSize()
