@@ -12,16 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\Pokefarm.Assests\0132.png" Link="Assets\0132.png">
+    <None Include="..\Pokefarm.Assests\*.png" Link="Assets\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="..\Pokefarm.Assests\0132.json" Link="Assets\0132.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="..\Pokefarm.Assests\0540.png" Link="Assets\0540.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="..\Pokefarm.Assests\0540.json" Link="Assets\0540.json">
+    <None Include="..\Pokefarm.Assests\*.json" Link="Assets\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
