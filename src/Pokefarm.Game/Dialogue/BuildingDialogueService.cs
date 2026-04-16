@@ -32,6 +32,17 @@ internal static class BuildingDialogueService
         }
         else if (building.Definition == ItemCatalog.WorkBench)
         {
+            if (WorkbenchCraftingHelpers.IsWorkbenchItemReady(building))
+            {
+                options.Add(new PokemonDialogueOption("PICKUP ITEMS", PokemonDialogueAction.CollectWorkbenchItem));
+            }
+
+            options.Add(new PokemonDialogueOption("QUEUE ITEMS", PokemonDialogueAction.OpenWorkbenchQueue));
+            if (building.WorkbenchQueuedItem is not null && !WorkbenchCraftingHelpers.IsWorkbenchItemReady(building))
+            {
+                options.Add(new PokemonDialogueOption("DEQUEUE ITEMS", PokemonDialogueAction.DequeueWorkbenchItem));
+            }
+
             foreach (SpawnedPokemon pokemon in spawnedPokemon)
             {
                 if (!pokemon.IsFollowingPlayer || pokemon.GetSkillLevel(SkillType.Crafting) <= 0)
@@ -59,17 +70,6 @@ internal static class BuildingDialogueService
                     $"UNASSIGN {building.WorkerPokemonName?.ToUpperInvariant() ?? "WORKER"}",
                     PokemonDialogueAction.UnassignWorkbenchWorker,
                     TargetPokemonId: building.WorkerPokemonId.Value));
-            }
-
-            options.Add(new PokemonDialogueOption("QUEUE ITEMS", PokemonDialogueAction.OpenWorkbenchQueue));
-            if (building.WorkbenchQueuedItem is not null && !WorkbenchCraftingHelpers.IsWorkbenchItemReady(building))
-            {
-                options.Add(new PokemonDialogueOption("DEQUEUE ITEMS", PokemonDialogueAction.DequeueWorkbenchItem));
-            }
-
-            if (WorkbenchCraftingHelpers.IsWorkbenchItemReady(building))
-            {
-                options.Add(new PokemonDialogueOption("PICKUP ITEMS", PokemonDialogueAction.CollectWorkbenchItem));
             }
         }
         else if (building.Definition.IsResourceProduction)
