@@ -15,4 +15,7 @@ internal sealed record SpawnedPokemon(
     bool IsFollowingPlayer = false,
     Vector2? HomePosition = null,
     string? SpeechText = null,
-    float SpeechTimerRemaining = 0f);
+    float SpeechTimerRemaining = 0f,
+    float IdleAnimationTimer = 0f,
+    int IdleAnimationFrame = 0,
+    float IdleCyclePauseRemaining = 0f);

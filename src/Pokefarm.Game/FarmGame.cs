@@ -37,6 +37,9 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private const float SpawnedPokemonMinMoveDelay = 2f;
     private const float SpawnedPokemonMaxMoveDelay = 4f;
     private const float SpawnedPokemonMoveDuration = 0.3f;
+    private const float UnclaimedPokemonIdleFrameTime = 0.22f;
+    private const float UnclaimedPokemonIdleCyclePauseSeconds = 0.8f;
+    private const int UnclaimedPokemonIdleFrameCount = 5;
     private const string PlayerPokemonName = "Ditto";
     private const float TalkExitDelaySeconds = 1f;
     private const string StartupMusicFileName = "09 Celadon City's Theme.mp3";
@@ -566,7 +569,13 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (SpawnedPokemon pokemon in _spawnedDittos)
         {
-            DrawPokemonAt(pokemon.Position, pokemon.Name, pokemon.Direction);
+            DrawPokemonAt(
+                pokemon.Position,
+                pokemon.Name,
+                pokemon.Direction,
+                isWalking: false,
+                walkFrame: 0,
+                idleFrame: pokemon.IsMoving ? 0 : pokemon.IdleAnimationFrame);
             DrawUnclaimedMarker(pokemon);
         }
     }
@@ -846,7 +855,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         string pokemonName,
         Direction direction = Direction.Down,
         bool isWalking = false,
-        int walkFrame = 0)
+        int walkFrame = 0,
+        int idleFrame = 0)
     {
         if (_spriteBatch is null)
         {
@@ -868,7 +878,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        SpriteFrame? frame = GetCurrentPlayerFrame(frames, direction, isWalking, walkFrame);
+        SpriteFrame? frame = GetCurrentPlayerFrame(frames, direction, isWalking, walkFrame, idleFrame);
         if (frame is null)
         {
             if (_pixel is not null)
@@ -1146,6 +1156,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
             if (!pokemon.IsClaimed)
             {
+                pokemon = UpdateUnclaimedPokemonIdleAnimation(pokemon, deltaTime);
                 _spawnedDittos[index] = pokemon with
                 {
                     IsMoving = false,
@@ -1187,6 +1198,9 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
                 continue;
             }
+
+            pokemon = UpdateUnclaimedPokemonIdleAnimation(pokemon, deltaTime);
+            _spawnedDittos[index] = pokemon;
 
             float nextMoveTime = pokemon.IsFollowingPlayer ? 0f : pokemon.MoveCooldownRemaining - deltaTime;
             if (nextMoveTime > 0f)
@@ -1300,9 +1314,56 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         return Random.Shared.NextSingle() * (SpawnedPokemonMaxMoveDelay - SpawnedPokemonMinMoveDelay) + SpawnedPokemonMinMoveDelay;
     }
 
+    private static SpawnedPokemon UpdateUnclaimedPokemonIdleAnimation(SpawnedPokemon pokemon, float deltaTime)
+    {
+        if (pokemon.IdleCyclePauseRemaining > 0f)
+        {
+            return pokemon with
+            {
+                IdleCyclePauseRemaining = Math.Max(0f, pokemon.IdleCyclePauseRemaining - deltaTime),
+                IdleAnimationTimer = 0f,
+                IdleAnimationFrame = 0
+            };
+        }
+
+        float idleTimer = pokemon.IdleAnimationTimer + deltaTime;
+        int idleFrame = pokemon.IdleAnimationFrame;
+        float pauseRemaining = 0f;
+        while (idleTimer >= UnclaimedPokemonIdleFrameTime)
+        {
+            idleTimer -= UnclaimedPokemonIdleFrameTime;
+            idleFrame++;
+            if (idleFrame >= UnclaimedPokemonIdleFrameCount)
+            {
+                idleFrame = 0;
+                idleTimer = 0f;
+                pauseRemaining = UnclaimedPokemonIdleCyclePauseSeconds;
+                break;
+            }
+        }
+
+        return pokemon with
+        {
+            IdleAnimationTimer = idleTimer,
+            IdleAnimationFrame = idleFrame,
+            IdleCyclePauseRemaining = pauseRemaining
+        };
+    }
+
     private static float GetNextPokemonMoveDelaySeconds(SpawnedPokemon pokemon)
     {
-        return pokemon.IsFollowingPlayer ? 0f : GetRandomMoveDelaySeconds();
+        if (pokemon.IsFollowingPlayer)
+        {
+            return 0f;
+        }
+
+        if (pokemon.HomePosition is Vector2 homePosition &&
+            Vector2.DistanceSquared(pokemon.Position, homePosition) > HomeWanderRadius * HomeWanderRadius)
+        {
+            return 0f;
+        }
+
+        return GetRandomMoveDelaySeconds();
     }
 
     private static Vector2 DirectionToMovement(Direction direction)
@@ -2025,6 +2086,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             IsFollowingPlayer = false,
             IsMoving = false,
             MoveTimeRemaining = 0f,
+            MoveCooldownRemaining = 0f,
             MoveTarget = pokemon.Position,
             HomePosition = homePosition,
             SpeechText = "HOME!",
@@ -2407,7 +2469,12 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _walkAnimationFrame = (_walkAnimationFrame + 1) % 5;
     }
 
-    private SpriteFrame? GetCurrentPlayerFrame(Dictionary<string, SpriteFrame> frames, Direction direction, bool isWalking, int walkFrame)
+    private SpriteFrame? GetCurrentPlayerFrame(
+        Dictionary<string, SpriteFrame> frames,
+        Direction direction,
+        bool isWalking,
+        int walkFrame,
+        int idleFrame = 0)
     {
         string action = isWalking ? "Walk" : "Idle";
         int directionIndex = direction switch
@@ -2419,7 +2486,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             _ => 0
         };
 
-        int frameIndex = action == "Walk" ? walkFrame : 0;
+        int frameIndex = action == "Walk" ? walkFrame : Math.Max(0, idleFrame);
         string key = $"Normal/{action}/Anim/{directionIndex}/{frameIndex:0000}";
         if (frames.TryGetValue(key, out SpriteFrame? frame))
         {
