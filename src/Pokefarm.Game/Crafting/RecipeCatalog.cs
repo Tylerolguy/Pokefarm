@@ -16,5 +16,6 @@ internal static class RecipeCatalog
         [
             new RecipeCost(ItemCatalog.Wood, 2)
         ],
-        CraftingSource.BasicWorkBenchCrafting);
+        CraftingSource.BasicWorkBenchCrafting,
+        5f);
 }

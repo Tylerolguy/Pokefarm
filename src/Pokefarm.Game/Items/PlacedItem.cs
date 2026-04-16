@@ -16,7 +16,10 @@ internal sealed record PlacedItem(
     int? WorkerPokemonId3 = null,
     float StoredProductionEffort = 0f,
     int StoredProducedUnits = 0,
-    int ProductionStepIndex = 0)
+    int ProductionStepIndex = 0,
+    ItemDefinition? WorkbenchQueuedItem = null,
+    float WorkbenchCraftEffortRemaining = 0f,
+    float WorkbenchCraftEffortRequired = 0f)
 {
     public double GetAgeSeconds(double currentWorldTimeSeconds) => Math.Max(0d, currentWorldTimeSeconds - PlacedAtWorldTimeSeconds);
 }

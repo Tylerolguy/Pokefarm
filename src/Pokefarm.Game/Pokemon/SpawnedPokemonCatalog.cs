@@ -26,11 +26,11 @@ internal static class SpawnedPokemonCatalog
         ["Caterpie"] = new SpawnedPokemonDefinition("Caterpie", NoSkills),
         ["Poliwag"] = new SpawnedPokemonDefinition("Poliwag", NoSkills),
         ["Hoppip"] = new SpawnedPokemonDefinition("Hoppip", NoSkills),
-        ["Tyrogue"] = new SpawnedPokemonDefinition("Tyrogue", NoSkills),
+        ["Tyrogue"] = new SpawnedPokemonDefinition("Tyrogue", CreateSkillLevels((SkillType.Crafting, 1))),
         ["Smoochum"] = new SpawnedPokemonDefinition("Smoochum", NoSkills),
         ["Magby"] = new SpawnedPokemonDefinition("Magby", NoSkills),
         ["Nincada"] = new SpawnedPokemonDefinition("Nincada", NoSkills),
-        ["Elekid"] = new SpawnedPokemonDefinition("Elekid", NoSkills)
+        ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1)))
     };
 
     public static SpawnedPokemonDefinition GetOrDefault(string pokemonName)

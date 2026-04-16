@@ -8,6 +8,11 @@ internal enum PokemonDialogueAction
     AssignResourceWork,
     UnassignResourceWork,
     CollectProduction,
+    AssignWorkbenchWorker,
+    UnassignWorkbenchWorker,
+    OpenWorkbenchQueue,
+    DequeueWorkbenchItem,
+    CollectWorkbenchItem,
     SetText,
     Exit
 }

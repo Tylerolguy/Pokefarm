@@ -27,7 +27,7 @@ internal static class SnackSpawnCatalog
             new WeightedPokemonSpawn("Smoochum", 1f),
             new WeightedPokemonSpawn("Magby", 1f),
             new WeightedPokemonSpawn("Nincada", 1f),
-            new WeightedPokemonSpawn("Elekid", 1f)
+            new WeightedPokemonSpawn("Elekid", 19f)
 
 
         ]
