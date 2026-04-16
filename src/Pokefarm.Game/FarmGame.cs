@@ -48,7 +48,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     [
         new(ItemCatalog.Bed, 3),
         new(ItemCatalog.WorkBench, 1),
-        new(ItemCatalog.BasicSnack, 2),
+        new(ItemCatalog.BasicSnack, 12),
+        new(ItemCatalog.BasicSnack2, 11),
         new(ItemCatalog.Planter, 1),
         new(ItemCatalog.Wood, 3),
         new(ItemCatalog.Stone, 5)
@@ -985,7 +986,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         for (int index = _placedItems.Count - 1; index >= 0; index--)
         {
             PlacedItem item = _placedItems[index];
-            if (item.Definition != ItemCatalog.BasicSnack)
+            if (item.Definition.Kind != ItemKind.Snack)
             {
                 continue;
             }
@@ -1957,7 +1958,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         _talkState.SetIcon(pokemonName, null);
-        string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", $"{pokemonName}Icon.png");
+        string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Pokemon Icons", $"{pokemonName}Icon.png");
         if (!File.Exists(iconPath))
         {
             return;

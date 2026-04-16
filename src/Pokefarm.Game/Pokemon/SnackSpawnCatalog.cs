@@ -7,8 +7,34 @@ internal static class SnackSpawnCatalog
         [ItemCatalog.BasicSnack] =
         [
             new WeightedPokemonSpawn("Sewaddle", 1f),
-            new WeightedPokemonSpawn("Azurill", 1f)
+            new WeightedPokemonSpawn("Azurill", 1f),
+            new WeightedPokemonSpawn("Sunkern", 1f),
+            new WeightedPokemonSpawn("Pidgey", 1f),
+            new WeightedPokemonSpawn("Cleffa", 1f),
+            new WeightedPokemonSpawn("Igglybuff", 1f),
+            new WeightedPokemonSpawn("Kricketot", 1f),
+            new WeightedPokemonSpawn("Bunnelby", 1f)
+
+        ],
+        
+        [ItemCatalog.BasicSnack2] =
+        [
+            new WeightedPokemonSpawn("Pichu", 1f),
+            new WeightedPokemonSpawn("Togepi", 1f),
+            new WeightedPokemonSpawn("Caterpie", 1f),
+            new WeightedPokemonSpawn("Poliwag", 1f),
+            new WeightedPokemonSpawn("Hoppip", 1f),
+            new WeightedPokemonSpawn("Tyrogue", 1f),
+            new WeightedPokemonSpawn("Smoochum", 1f),
+            new WeightedPokemonSpawn("Magby", 1f),
+            new WeightedPokemonSpawn("Nincada", 1f),
+            new WeightedPokemonSpawn("Pikipek", 1f),
+            new WeightedPokemonSpawn("Yungoos", 1f),
+            new WeightedPokemonSpawn("Elekid", 1f)
+
+
         ]
+        
     };
 
     public static string RollSpawnName(ItemDefinition snackDefinition)

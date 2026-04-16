@@ -24,5 +24,8 @@
     <None Include="..\Pokefarm.Assests\Pokemon Models\**\*.json" Link="Assets\Pokemon Models\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Pokefarm.Assests\Pokemon Icons\**\*.png" Link="Assets\Pokemon Icons\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
