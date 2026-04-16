@@ -54,6 +54,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     [
         new(ItemCatalog.Bed, 3),
         new(ItemCatalog.WorkBench, 1),
+        new(ItemCatalog.Tree, 1),
+        new(ItemCatalog.Farm, 1),
         new(ItemCatalog.BasicSnack, 12),
         new(ItemCatalog.BasicSnack2, 11),
         new(ItemCatalog.Planter, 1),
@@ -71,6 +73,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private readonly Dictionary<string, Texture2D?> _pokemonSpriteSheets = [];
     private readonly Dictionary<string, Dictionary<string, SpriteFrame>> _pokemonFrames = [];
     private readonly HashSet<string> _pokemonSpriteLoadAttempted = [];
+    private readonly Dictionary<string, Texture2D?> _pokemonIconTextures = [];
+    private readonly HashSet<string> _pokemonIconLoadAttempted = [];
     private Song? _backgroundMusic;
     private SoundEffect? _backgroundMusicEffect;
     private SoundEffectInstance? _backgroundMusicEffectInstance;
@@ -418,6 +422,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             _worldBounds.Height - BorderThickness - PlayerSize);
 
         UpdateExpiredSnacks();
+        UpdateResourceProduction(deltaTime);
         UpdateSpawnedPokemon(deltaTime);
         _interactTarget = _inputMode == InputMode.Gameplay ? FindInteractableTarget() : null;
         _talkTargetIndex = _inputMode == InputMode.Gameplay ? FindNearbyPokemonTargetIndex() : -1;
@@ -534,11 +539,50 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (PlacedItem item in _placedItems)
         {
-            Texture2D texture = (item.Definition.Kind == ItemKind.Building || item.Definition.Kind == ItemKind.Snack) && item.Definition.HasCollision
+            Texture2D texture = (item.Definition.IsBuildingLike || item.Definition.Kind == ItemKind.Snack) && item.Definition.HasCollision
                 ? _pixel
                 : _circleTexture;
             _spriteBatch.Draw(texture, item.Bounds, item.Definition.Tint);
             DrawPanelBorder(item.Bounds, new Color(40, 28, 20));
+
+            if (item.Definition.IsResourceProduction && GetWorkerPokemonNames(item).Count > 0)
+            {
+                DrawBuildingWorkerIcons(item);
+            }
+        }
+    }
+
+    private void DrawBuildingWorkerIcons(PlacedItem building)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        List<string> workerNames = GetWorkerPokemonNames(building);
+        const int iconSize = 22;
+        const int spacing = 3;
+        int totalWidth = (workerNames.Count * iconSize) + ((workerNames.Count - 1) * spacing);
+        int startX = building.Bounds.Center.X - (totalWidth / 2);
+
+        for (int index = 0; index < workerNames.Count; index++)
+        {
+            string workerName = workerNames[index];
+            if (!TryGetPokemonIconTexture(workerName, out Texture2D? iconTexture))
+            {
+                continue;
+            }
+
+            Rectangle iconBounds = new(
+                startX + (index * (iconSize + spacing)),
+                building.Bounds.Bottom - (iconSize / 2),
+                iconSize,
+                iconSize);
+
+            _spriteBatch.Draw(_pixel, iconBounds, new Color(30, 20, 14, 220));
+            DrawPanelBorder(iconBounds, new Color(181, 138, 95));
+            Rectangle innerBounds = new(iconBounds.X + 2, iconBounds.Y + 2, iconBounds.Width - 4, iconBounds.Height - 4);
+            _spriteBatch.Draw(iconTexture, innerBounds, Color.White);
         }
     }
 
@@ -553,7 +597,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             ? new Color(_previewItem.Definition.Tint.R, _previewItem.Definition.Tint.G, _previewItem.Definition.Tint.B, (byte)150)
             : new Color((byte)220, (byte)80, (byte)80, (byte)150);
 
-        Texture2D texture = (_previewItem.Definition.Kind == ItemKind.Building || _previewItem.Definition.Kind == ItemKind.Snack) && _previewItem.Definition.HasCollision
+        Texture2D texture = (_previewItem.Definition.IsBuildingLike || _previewItem.Definition.Kind == ItemKind.Snack) && _previewItem.Definition.HasCollision
             ? _pixel
             : _circleTexture;
         _spriteBatch.Draw(texture, _previewItem.Bounds, tint);
@@ -569,6 +613,11 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (SpawnedPokemon pokemon in _spawnedDittos)
         {
+            if (pokemon.IsWorking)
+            {
+                continue;
+            }
+
             DrawPokemonAt(
                 pokemon.Position,
                 pokemon.Name,
@@ -617,7 +666,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         Color tint = new(255, 215, 90, 140);
-        Texture2D texture = (_removeTarget.Definition.Kind == ItemKind.Building || _removeTarget.Definition.Kind == ItemKind.Snack) && _removeTarget.Definition.HasCollision
+        Texture2D texture = (_removeTarget.Definition.IsBuildingLike || _removeTarget.Definition.Kind == ItemKind.Snack) && _removeTarget.Definition.HasCollision
             ? _pixel
             : _circleTexture ?? _pixel;
         _spriteBatch.Draw(texture, _removeTarget.Bounds, tint);
@@ -663,7 +712,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                     slot.Y + 22,
                     iconSize,
                     iconSize);
-                Texture2D texture = (entry.Definition.Kind == ItemKind.Building || entry.Definition.Kind == ItemKind.Snack) && entry.Definition.HasCollision
+                Texture2D texture = (entry.Definition.IsBuildingLike || entry.Definition.Kind == ItemKind.Snack) && entry.Definition.HasCollision
                     ? _pixel
                     : _circleTexture;
                 string label = entry.Definition.Name.ToUpperInvariant();
@@ -922,7 +971,6 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         {
             DrawPromptPanel($"{_interactTarget.ResidentPokemonName!.ToUpperInvariant()} LIVES HERE", new Point(GraphicsDevice.Viewport.Width / 2, 48));
         }
-
         if (_interactTarget is not null)
         {
             string buildingName = _interactTarget.Definition.Name.ToUpperInvariant();
@@ -949,6 +997,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         Rectangle optionsPanel = new(textPanel.Right + 18, panel.Y + 15, 205, 97);
         List<PokemonDialogueOption> options = _talkState.Options;
         int scrollOffset = Math.Clamp(_talkState.SelectedOptionIndex - VisibleTalkOptionCount + 1, 0, Math.Max(0, options.Count - VisibleTalkOptionCount));
+        bool hideSelectableOptions = _talkExitTimer > 0f;
 
         _spriteBatch.Draw(_pixel, panel, new Color(44, 31, 23, 245));
         DrawPanelBorder(panel, new Color(181, 138, 95));
@@ -974,6 +1023,12 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         _spriteBatch.Draw(_pixel, optionsPanel, new Color(58, 43, 33));
         DrawPanelBorder(optionsPanel, new Color(120, 90, 65));
+
+        if (hideSelectableOptions)
+        {
+            return;
+        }
+
         DrawPixelText("YOU SAY", new Vector2(optionsPanel.X + 12, optionsPanel.Y + 8), new Color(236, 220, 196));
 
         if (scrollOffset > 0)
@@ -1115,7 +1170,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                 spawnName,
                 spawnPosition,
                 Direction.Down,
-                GetRandomMoveDelaySeconds()));
+                GetRandomMoveDelaySeconds(),
+                GetPokemonSkills(spawnName)));
             _placedItems.RemoveAt(index);
 
             if (_removeTarget == item)
@@ -1130,6 +1186,21 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         for (int index = 0; index < _spawnedDittos.Count; index++)
         {
             SpawnedPokemon pokemon = _spawnedDittos[index];
+            if (pokemon.IsWorking)
+            {
+                _spawnedDittos[index] = pokemon with
+                {
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveTarget = pokemon.Position,
+                    MoveCooldownRemaining = 0f,
+                    IdleAnimationFrame = 0,
+                    IdleAnimationTimer = 0f,
+                    IdleCyclePauseRemaining = 0f
+                };
+                continue;
+            }
+
             if (_inputMode == InputMode.Talking && index == _talkState.ActivePokemonIndex)
             {
                 Direction facePlayerDirection = GetDirectionTowardTarget(pokemon.Position, _playerPosition);
@@ -1293,6 +1364,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             SpawnedPokemon pokemon = _spawnedDittos[index];
+            if (pokemon.IsWorking)
+            {
+                continue;
+            }
 
             Rectangle pokemonBounds = new(
                 (int)pokemon.Position.X,
@@ -1312,6 +1387,185 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private static float GetRandomMoveDelaySeconds()
     {
         return Random.Shared.NextSingle() * (SpawnedPokemonMaxMoveDelay - SpawnedPokemonMinMoveDelay) + SpawnedPokemonMinMoveDelay;
+    }
+
+    private void UpdateResourceProduction(float deltaTime)
+    {
+        for (int index = 0; index < _placedItems.Count; index++)
+        {
+            PlacedItem building = _placedItems[index];
+            if (!building.Definition.IsResourceProduction ||
+                building.Definition.ProducedMaterial is null ||
+                building.Definition.EffortPerProducedUnit <= 0f ||
+                building.Definition.MaxStoredProducedUnits <= 0)
+            {
+                continue;
+            }
+
+            if (building.StoredProducedUnits >= building.Definition.MaxStoredProducedUnits)
+            {
+                continue;
+            }
+
+            List<int> workerIds = GetWorkerPokemonIds(building);
+            if (workerIds.Count == 0)
+            {
+                continue;
+            }
+
+            float effortPerSecond = 0f;
+            foreach (int workerId in workerIds)
+            {
+                SpawnedPokemon? worker = _spawnedDittos.FirstOrDefault(pokemon => pokemon.PokemonId == workerId);
+                if (worker is null)
+                {
+                    continue;
+                }
+
+                effortPerSecond += GetPokemonEffortPerSecond(worker, building.Definition);
+            }
+
+            if (effortPerSecond <= 0f)
+            {
+                continue;
+            }
+
+            float effort = building.StoredProductionEffort + (effortPerSecond * deltaTime);
+            int storedUnits = building.StoredProducedUnits;
+            int stepIndex = Math.Clamp(building.ProductionStepIndex, 0, Math.Max(0, building.Definition.ProductionStepCount - 1));
+            while (effort >= building.Definition.EffortPerProducedUnit && storedUnits < building.Definition.MaxStoredProducedUnits)
+            {
+                effort -= building.Definition.EffortPerProducedUnit;
+                stepIndex++;
+                if (stepIndex >= building.Definition.ProductionStepCount)
+                {
+                    stepIndex = 0;
+                    storedUnits++;
+                }
+            }
+
+            _placedItems[index] = building with
+            {
+                StoredProductionEffort = storedUnits >= building.Definition.MaxStoredProducedUnits ? 0f : effort,
+                StoredProducedUnits = storedUnits,
+                ProductionStepIndex = storedUnits >= building.Definition.MaxStoredProducedUnits ? 0 : stepIndex
+            };
+
+            if (_interactTarget == building)
+            {
+                _interactTarget = _placedItems[index];
+            }
+
+            if (_talkState.ActiveBuilding == building)
+            {
+                _talkState.UpdateBuildingReference(_placedItems[index]);
+            }
+        }
+    }
+
+    private static float GetPokemonEffortPerSecond(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
+    {
+        // Skill level is currently modeled as 1 when the required skill is present.
+        return PokemonHasSkillForBuilding(pokemon, buildingDefinition) ? 1f : 0f;
+    }
+
+    private static PokemonSkill GetPokemonSkills(string pokemonName)
+    {
+        return pokemonName switch
+        {
+            "Sewaddle" => PokemonSkill.Lumber | PokemonSkill.Farming,
+            "Azurill" => PokemonSkill.Farming,
+            _ => PokemonSkill.None
+        };
+    }
+
+    private static List<int> GetWorkerPokemonIds(PlacedItem building)
+    {
+        List<int> workerIds = [];
+        if (building.WorkerPokemonId.HasValue)
+        {
+            workerIds.Add(building.WorkerPokemonId.Value);
+        }
+
+        if (building.WorkerPokemonId2.HasValue)
+        {
+            workerIds.Add(building.WorkerPokemonId2.Value);
+        }
+
+        if (building.WorkerPokemonId3.HasValue)
+        {
+            workerIds.Add(building.WorkerPokemonId3.Value);
+        }
+
+        return workerIds;
+    }
+
+    private static List<string> GetWorkerPokemonNames(PlacedItem building)
+    {
+        List<string> workerNames = [];
+        if (!string.IsNullOrEmpty(building.WorkerPokemonName))
+        {
+            workerNames.Add(building.WorkerPokemonName);
+        }
+
+        if (!string.IsNullOrEmpty(building.WorkerPokemonName2))
+        {
+            workerNames.Add(building.WorkerPokemonName2);
+        }
+
+        if (!string.IsNullOrEmpty(building.WorkerPokemonName3))
+        {
+            workerNames.Add(building.WorkerPokemonName3);
+        }
+
+        return workerNames;
+    }
+
+    private static bool HasWorker(PlacedItem building, int pokemonId)
+    {
+        return building.WorkerPokemonId == pokemonId ||
+               building.WorkerPokemonId2 == pokemonId ||
+               building.WorkerPokemonId3 == pokemonId;
+    }
+
+    private static PlacedItem AddWorkerToBuilding(PlacedItem building, SpawnedPokemon pokemon)
+    {
+        if (!building.WorkerPokemonId.HasValue)
+        {
+            return building with { WorkerPokemonId = pokemon.PokemonId, WorkerPokemonName = pokemon.Name };
+        }
+
+        if (!building.WorkerPokemonId2.HasValue)
+        {
+            return building with { WorkerPokemonId2 = pokemon.PokemonId, WorkerPokemonName2 = pokemon.Name };
+        }
+
+        if (!building.WorkerPokemonId3.HasValue)
+        {
+            return building with { WorkerPokemonId3 = pokemon.PokemonId, WorkerPokemonName3 = pokemon.Name };
+        }
+
+        return building;
+    }
+
+    private static PlacedItem RemoveWorkerFromBuilding(PlacedItem building, int pokemonId)
+    {
+        if (building.WorkerPokemonId == pokemonId)
+        {
+            return building with { WorkerPokemonId = null, WorkerPokemonName = null };
+        }
+
+        if (building.WorkerPokemonId2 == pokemonId)
+        {
+            return building with { WorkerPokemonId2 = null, WorkerPokemonName2 = null };
+        }
+
+        if (building.WorkerPokemonId3 == pokemonId)
+        {
+            return building with { WorkerPokemonId3 = null, WorkerPokemonName3 = null };
+        }
+
+        return building;
     }
 
     private static SpawnedPokemon UpdateUnclaimedPokemonIdleAnimation(SpawnedPokemon pokemon, float deltaTime)
@@ -1733,7 +1987,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             _worldBounds.Width - (BorderThickness * 2),
             _worldBounds.Height - (BorderThickness * 2));
 
-        if (candidateItem.Definition.Kind != ItemKind.Building && candidateItem.Definition.Kind != ItemKind.Snack)
+        if (!candidateItem.Definition.IsBuildingLike && candidateItem.Definition.Kind != ItemKind.Snack)
         {
             return false;
         }
@@ -1764,6 +2018,35 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         if (_inputMode != InputMode.Removal || _removeTarget is null || _inventoryItems.Count >= InventoryColumns * InventoryRows)
         {
             return;
+        }
+
+        foreach (int workerPokemonId in GetWorkerPokemonIds(_removeTarget))
+        {
+            int workerIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == workerPokemonId);
+            if (workerIndex >= 0)
+            {
+                SpawnedPokemon worker = _spawnedDittos[workerIndex];
+                Vector2 respawnPosition = new(
+                    _removeTarget.Bounds.Center.X - (PlayerSize / 2f),
+                    _removeTarget.Bounds.Center.Y - (PlayerSize / 2f));
+                _spawnedDittos[workerIndex] = worker with
+                {
+                    IsWorking = false,
+                    IsFollowingPlayer = false,
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                    MoveTarget = respawnPosition,
+                    Position = respawnPosition
+                };
+            }
+        }
+
+        if (_removeTarget.Definition.IsResourceProduction &&
+            _removeTarget.Definition.ProducedMaterial is ItemDefinition producedMaterial &&
+            _removeTarget.StoredProducedUnits > 0)
+        {
+            AddInventoryItem(producedMaterial, _removeTarget.StoredProducedUnits);
         }
 
         _placedItems.Remove(_removeTarget);
@@ -1822,7 +2105,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (PlacedItem item in _placedItems)
         {
-            if (item.Definition.Kind != ItemKind.Building && item.Definition != ItemCatalog.Bed)
+            if (!item.Definition.IsBuildingLike && item.Definition != ItemCatalog.Bed)
             {
                 continue;
             }
@@ -1881,6 +2164,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         for (int index = 0; index < _spawnedDittos.Count; index++)
         {
             SpawnedPokemon pokemon = _spawnedDittos[index];
+            if (pokemon.IsWorking)
+            {
+                continue;
+            }
             Rectangle pokemonBounds = new(
                 (int)pokemon.Position.X,
                 (int)pokemon.Position.Y,
@@ -1988,6 +2275,40 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.AssignResourceWork && selectedOption.TargetPokemonId.HasValue)
+        {
+            AssignPokemonToResourceBuilding(selectedOption.TargetPokemonId.Value);
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+            else
+            {
+                ExitTalkMode();
+            }
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.UnassignResourceWork && selectedOption.TargetPokemonId.HasValue)
+        {
+            UnassignPokemonFromActiveResourceBuilding(selectedOption.TargetPokemonId.Value);
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.CollectProduction)
+        {
+            CollectProducedMaterialsFromActiveBuilding();
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.SetText && !string.IsNullOrEmpty(selectedOption.ResponseText))
         {
             _talkState.SetText(selectedOption.ResponseText);
@@ -2060,6 +2381,47 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                     TargetPokemonId: pokemon.PokemonId));
             }
         }
+        else if (building.Definition.IsResourceProduction)
+        {
+            foreach (SpawnedPokemon pokemon in _spawnedDittos)
+            {
+                if (!pokemon.IsFollowingPlayer)
+                {
+                    continue;
+                }
+
+                if (!CanAssignPokemonToResourceBuilding(pokemon, building))
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"ASSIGN {pokemon.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.AssignResourceWork,
+                    TargetPokemonId: pokemon.PokemonId));
+            }
+
+            foreach (int workerPokemonId in GetWorkerPokemonIds(building))
+            {
+                SpawnedPokemon? worker = _spawnedDittos.FirstOrDefault(pokemon => pokemon.PokemonId == workerPokemonId);
+                if (worker is null)
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"UNASSIGN {worker.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.UnassignResourceWork,
+                    TargetPokemonId: worker.PokemonId));
+            }
+
+            if (building.Definition.ProducedMaterial is ItemDefinition producedMaterial && building.StoredProducedUnits > 0)
+            {
+                options.Add(new PokemonDialogueOption(
+                    $"TAKE {building.StoredProducedUnits} {producedMaterial.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.CollectProduction));
+            }
+        }
 
         options.Add(new PokemonDialogueOption("BYE", PokemonDialogueAction.Exit));
         return options;
@@ -2083,6 +2445,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _spawnedDittos[pokemonIndex] = pokemon with
         {
             IsClaimed = true,
+            IsWorking = false,
             IsFollowingPlayer = false,
             IsMoving = false,
             MoveTimeRemaining = 0f,
@@ -2112,6 +2475,224 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    private void AssignPokemonToResourceBuilding(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
+        {
+            return;
+        }
+
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        PlacedItem building = _talkState.ActiveBuilding;
+
+        if (!CanAssignPokemonToResourceBuilding(pokemon, building))
+        {
+            _talkState.SetText("THIS POKEMON CANT WORK HERE");
+            return;
+        }
+
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
+
+        int buildingIndex = _placedItems.FindIndex(item => item == building);
+        if (buildingIndex < 0)
+        {
+            return;
+        }
+
+        _placedItems[buildingIndex] = AddWorkerToBuilding(_placedItems[buildingIndex], pokemon);
+
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            IsWorking = true,
+            IsFollowingPlayer = false,
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveCooldownRemaining = 0f,
+            MoveTarget = pokemon.Position,
+            IdleAnimationFrame = 0,
+            IdleAnimationTimer = 0f,
+            IdleCyclePauseRemaining = 0f
+        };
+
+        _interactTarget = _placedItems[buildingIndex];
+        _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
+
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} STARTS LUMBER WORK");
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} ASSIGNED TO {building.Definition.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private void UnassignPokemonFromActiveResourceBuilding(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
+        {
+            return;
+        }
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (buildingIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem building = _placedItems[buildingIndex];
+        if (!HasWorker(building, pokemonId))
+        {
+            _talkState.SetText("NO WORKER ASSIGNED");
+            return;
+        }
+
+        int workerIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (workerIndex >= 0)
+        {
+            SpawnedPokemon worker = _spawnedDittos[workerIndex];
+            Vector2 respawnPosition = new(
+                building.Bounds.Center.X - (PlayerSize / 2f),
+                building.Bounds.Bottom - PlayerSize);
+            _spawnedDittos[workerIndex] = worker with
+            {
+                IsWorking = false,
+                IsFollowingPlayer = false,
+                IsMoving = false,
+                MoveTimeRemaining = 0f,
+                MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                MoveTarget = respawnPosition,
+                Position = respawnPosition
+            };
+        }
+
+        _placedItems[buildingIndex] = RemoveWorkerFromBuilding(building, pokemonId);
+
+        _interactTarget = _placedItems[buildingIndex];
+        _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[buildingIndex]));
+        _talkState.SetText("WORKER UNASSIGNED");
+        _interactionMessage = "WORKER UNASSIGNED";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private void CollectProducedMaterialsFromActiveBuilding()
+    {
+        if (_talkState.ActiveBuilding is null)
+        {
+            return;
+        }
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (buildingIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem building = _placedItems[buildingIndex];
+        if (!building.Definition.IsResourceProduction ||
+            building.Definition.ProducedMaterial is not ItemDefinition producedMaterial ||
+            building.StoredProducedUnits <= 0)
+        {
+            _talkState.SetText("NOTHING TO COLLECT");
+            return;
+        }
+
+        AddInventoryItem(producedMaterial, building.StoredProducedUnits);
+        _placedItems[buildingIndex] = building with
+        {
+            StoredProducedUnits = 0
+        };
+
+        _interactTarget = _placedItems[buildingIndex];
+        _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[buildingIndex]));
+        _talkState.SetText($"COLLECTED {producedMaterial.Name.ToUpperInvariant()} X{building.StoredProducedUnits}");
+        _interactionMessage = $"COLLECTED {producedMaterial.Name.ToUpperInvariant()} X{building.StoredProducedUnits}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private void ClearExistingWorkBuildingForPokemon(int pokemonId)
+    {
+        for (int index = 0; index < _placedItems.Count; index++)
+        {
+            PlacedItem item = _placedItems[index];
+            if (!HasWorker(item, pokemonId))
+            {
+                continue;
+            }
+
+            _placedItems[index] = RemoveWorkerFromBuilding(item, pokemonId);
+        }
+
+        int workerIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (workerIndex >= 0)
+        {
+            SpawnedPokemon worker = _spawnedDittos[workerIndex];
+            _spawnedDittos[workerIndex] = worker with { IsWorking = false };
+        }
+    }
+
+    private bool CanAssignPokemonToResourceBuilding(SpawnedPokemon pokemon, PlacedItem building)
+    {
+        if (!building.Definition.IsResourceProduction)
+        {
+            return false;
+        }
+
+        if (pokemon.HomePosition is not Vector2 homePosition)
+        {
+            return false;
+        }
+
+        if (!PokemonHasSkillForBuilding(pokemon, building.Definition))
+        {
+            return false;
+        }
+
+        if (pokemon.IsWorking)
+        {
+            return false;
+        }
+
+        if (GetWorkerPokemonIds(building).Count >= Math.Max(1, building.Definition.MaxWorkers))
+        {
+            return false;
+        }
+
+        if (HasWorker(building, pokemon.PokemonId))
+        {
+            return false;
+        }
+
+        Vector2 buildingPosition = new(
+            building.Bounds.Center.X - (PlayerSize / 2f),
+            building.Bounds.Center.Y - (PlayerSize / 2f));
+        return Vector2.DistanceSquared(homePosition, buildingPosition) <= HomeWanderRadius * HomeWanderRadius;
+    }
+
+    private static bool PokemonHasSkillForBuilding(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
+    {
+        PokemonSkill requiredSkill = buildingDefinition.RequiredSkill;
+        return requiredSkill == PokemonSkill.None || (pokemon.Skills & requiredSkill) == requiredSkill;
+    }
+
+    private static string GetProductionStepLabel(PlacedItem building)
+    {
+        if (building.Definition == ItemCatalog.Farm)
+        {
+            return building.ProductionStepIndex switch
+            {
+                0 => "PLANTING",
+                1 => "WATERING",
+                _ => "HARVESTING"
+            };
+        }
+
+        return "PROGRESS";
+    }
+
     private void SetActiveTalkIcon(string pokemonName)
     {
         if (_talkState.IconName == pokemonName)
@@ -2119,15 +2700,35 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
-        _talkState.SetIcon(pokemonName, null);
+        _talkState.SetIcon(pokemonName, TryGetPokemonIconTexture(pokemonName, out Texture2D? iconTexture) ? iconTexture : null);
+    }
+
+    private bool TryGetPokemonIconTexture(string pokemonName, out Texture2D? iconTexture)
+    {
+        if (_pokemonIconTextures.TryGetValue(pokemonName, out iconTexture))
+        {
+            return iconTexture is not null;
+        }
+
+        if (_pokemonIconLoadAttempted.Contains(pokemonName))
+        {
+            iconTexture = null;
+            return false;
+        }
+
+        _pokemonIconLoadAttempted.Add(pokemonName);
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Pokemon Icons", $"{pokemonName}Icon.png");
         if (!File.Exists(iconPath))
         {
-            return;
+            _pokemonIconTextures[pokemonName] = null;
+            iconTexture = null;
+            return false;
         }
 
         using FileStream iconStream = File.OpenRead(iconPath);
-        _talkState.SetIcon(pokemonName, Texture2D.FromStream(GraphicsDevice, iconStream));
+        iconTexture = Texture2D.FromStream(GraphicsDevice, iconStream);
+        _pokemonIconTextures[pokemonName] = iconTexture;
+        return true;
     }
 
     private void FaceConversationTarget(Vector2 targetPosition)

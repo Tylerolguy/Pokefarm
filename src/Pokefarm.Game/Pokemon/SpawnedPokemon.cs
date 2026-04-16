@@ -8,6 +8,8 @@ internal sealed record SpawnedPokemon(
     Vector2 Position,
     Direction Direction,
     float MoveCooldownRemaining,
+    PokemonSkill Skills = PokemonSkill.None,
+    bool IsWorking = false,
     bool IsMoving = false,
     Vector2 MoveTarget = default,
     float MoveTimeRemaining = 0f,
