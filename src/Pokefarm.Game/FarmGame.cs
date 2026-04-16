@@ -1,6 +1,8 @@
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Audio;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Media;
 using System.Text.Json;
 
 namespace Pokefarm.Game;
@@ -37,6 +39,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private const float SpawnedPokemonMoveDuration = 0.3f;
     private const string PlayerPokemonName = "Ditto";
     private const float TalkExitDelaySeconds = 1f;
+    private const string StartupMusicFileName = "09 Celadon City's Theme.mp3";
     private static readonly Color UnclaimedMarkerBackground = new(30, 20, 14, 230);
     private static readonly Color UnclaimedMarkerText = new(236, 220, 196);
 
@@ -65,6 +68,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private readonly Dictionary<string, Texture2D?> _pokemonSpriteSheets = [];
     private readonly Dictionary<string, Dictionary<string, SpriteFrame>> _pokemonFrames = [];
     private readonly HashSet<string> _pokemonSpriteLoadAttempted = [];
+    private Song? _backgroundMusic;
+    private SoundEffect? _backgroundMusicEffect;
+    private SoundEffectInstance? _backgroundMusicEffectInstance;
+    private dynamic? _windowsMediaPlayer;
     private Vector2 _playerPosition = new(200f, 200f);
     private Vector2 _playerMovement;
     private Matrix _cameraMatrix = Matrix.Identity;
@@ -149,6 +156,99 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _pixel.SetData(new[] { Color.White });
         _circleTexture = CreateCircleTexture(DefaultIconSize);
         EnsurePokemonSpriteLoaded(PlayerPokemonName);
+        TryStartBackgroundMusic();
+    }
+
+    protected override void UnloadContent()
+    {
+        MediaPlayer.Stop();
+        _backgroundMusic?.Dispose();
+        _backgroundMusic = null;
+        _backgroundMusicEffectInstance?.Stop();
+        _backgroundMusicEffectInstance?.Dispose();
+        _backgroundMusicEffectInstance = null;
+        _backgroundMusicEffect?.Dispose();
+        _backgroundMusicEffect = null;
+        try
+        {
+            if (_windowsMediaPlayer is not null)
+            {
+                _windowsMediaPlayer.controls.stop();
+                _windowsMediaPlayer.close();
+                _windowsMediaPlayer = null;
+            }
+        }
+        catch
+        {
+            _windowsMediaPlayer = null;
+        }
+        base.UnloadContent();
+    }
+
+    private void TryStartBackgroundMusic()
+    {
+        string musicPath = Path.Combine(AppContext.BaseDirectory, "Assets", StartupMusicFileName);
+        if (!File.Exists(musicPath))
+        {
+            return;
+        }
+
+        try
+        {
+            _backgroundMusic = Song.FromUri(StartupMusicFileName, new Uri(musicPath, UriKind.Absolute));
+            MediaPlayer.IsRepeating = true;
+            MediaPlayer.Volume = 0.4f;
+            MediaPlayer.Play(_backgroundMusic);
+            return;
+        }
+        catch
+        {
+            _backgroundMusic = null;
+        }
+
+        try
+        {
+            _backgroundMusicEffect = SoundEffect.FromFile(musicPath);
+            _backgroundMusicEffectInstance = _backgroundMusicEffect.CreateInstance();
+            _backgroundMusicEffectInstance.IsLooped = true;
+            _backgroundMusicEffectInstance.Volume = 0.4f;
+            _backgroundMusicEffectInstance.Play();
+        }
+        catch
+        {
+            _backgroundMusicEffectInstance = null;
+            _backgroundMusicEffect = null;
+        }
+
+        TryStartBackgroundMusicWithWindowsPlayer(musicPath);
+    }
+
+    private void TryStartBackgroundMusicWithWindowsPlayer(string musicPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        try
+        {
+            Type? windowsMediaPlayerType = Type.GetTypeFromProgID("WMPlayer.OCX");
+            if (windowsMediaPlayerType is null)
+            {
+                return;
+            }
+
+            dynamic player = Activator.CreateInstance(windowsMediaPlayerType)!;
+            player.URL = musicPath;
+            player.settings.setMode("loop", true);
+            player.settings.volume = 40;
+            player.controls.play();
+            _windowsMediaPlayer = player;
+        }
+        catch
+        {
+            _windowsMediaPlayer = null;
+        }
     }
 
     protected override void Update(GameTime gameTime)
