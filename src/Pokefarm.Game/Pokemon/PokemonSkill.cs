@@ -1,9 +1,8 @@
 namespace Pokefarm.Game;
 
-[Flags]
-internal enum PokemonSkill
+internal enum SkillType
 {
     None = 0,
-    Lumber = 1 << 0,
-    Farming = 1 << 1
+    Lumber = 1,
+    Farming = 2
 }

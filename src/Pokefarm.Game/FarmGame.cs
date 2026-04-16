@@ -1203,6 +1203,11 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             (int)playerTopLeft.Y,
             PlayerSize,
             PlayerSize);
+        Rectangle currentPlayerBounds = new(
+            (int)_playerPosition.X,
+            (int)_playerPosition.Y,
+            PlayerSize,
+            PlayerSize);
 
         foreach (PlacedItem item in _placedItems)
         {
@@ -1214,6 +1219,11 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (SpawnedPokemon ditto in _spawnedDittos)
         {
+            if (ditto.IsWorking)
+            {
+                continue;
+            }
+
             Rectangle dittoBounds = new(
                 (int)ditto.Position.X,
                 (int)ditto.Position.Y,
@@ -1222,6 +1232,13 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
             if (playerBounds.Intersects(dittoBounds))
             {
+                if (currentPlayerBounds.Intersects(dittoBounds))
+                {
+                    // If Ditto is already overlapping this Pokemon, temporarily ignore it
+                    // so the player can step out instead of getting trapped.
+                    continue;
+                }
+
                 return true;
             }
         }
@@ -1248,13 +1265,14 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                 item.Bounds.Center.X - (PlayerSize / 2f),
                 item.Bounds.Center.Y - (PlayerSize / 2f));
             string spawnName = SnackSpawnCatalog.RollSpawnName(item.Definition);
+            SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(spawnName);
             _spawnedDittos.Add(new SpawnedPokemon(
                 _nextPokemonId++,
-                spawnName,
+                spawnDefinition.Name,
                 spawnPosition,
                 Direction.Down,
                 GetRandomMoveDelaySeconds(),
-                GetPokemonSkills(spawnName)));
+                spawnDefinition.SkillLevels));
             _placedItems.RemoveAt(index);
 
             if (_removeTarget == item)
@@ -2024,18 +2042,19 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
     private static float GetPokemonEffortPerSecond(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
     {
-        // Skill level is currently modeled as 1 when the required skill is present.
-        return PokemonHasSkillForBuilding(pokemon, buildingDefinition) ? 1f : 0f;
-    }
-
-    private static PokemonSkill GetPokemonSkills(string pokemonName)
-    {
-        return pokemonName switch
+        SkillType requiredSkill = buildingDefinition.RequiredSkill;
+        if (requiredSkill == SkillType.None)
         {
-            "Sewaddle" => PokemonSkill.Lumber | PokemonSkill.Farming,
-            "Azurill" => PokemonSkill.Farming,
-            _ => PokemonSkill.None
-        };
+            return 1f;
+        }
+
+        int skillLevel = pokemon.GetSkillLevel(requiredSkill);
+        if (skillLevel <= 0)
+        {
+            return 0f;
+        }
+
+        return skillLevel;
     }
 
     private static List<int> GetWorkerPokemonIds(PlacedItem building)
@@ -3314,8 +3333,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
     private static bool PokemonHasSkillForBuilding(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
     {
-        PokemonSkill requiredSkill = buildingDefinition.RequiredSkill;
-        return requiredSkill == PokemonSkill.None || (pokemon.Skills & requiredSkill) == requiredSkill;
+        SkillType requiredSkill = buildingDefinition.RequiredSkill;
+        return requiredSkill == SkillType.None || pokemon.GetSkillLevel(requiredSkill) > 0;
     }
 
     private static string GetProductionStepLabel(PlacedItem building)

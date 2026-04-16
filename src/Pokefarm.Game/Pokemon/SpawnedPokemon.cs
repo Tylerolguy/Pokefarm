@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
@@ -8,7 +9,8 @@ internal sealed record SpawnedPokemon(
     Vector2 Position,
     Direction Direction,
     float MoveCooldownRemaining,
-    PokemonSkill Skills = PokemonSkill.None,
+    IReadOnlyDictionary<SkillType, int>? SkillLevels = null,
+    bool IsAssignedToWork = false,
     bool IsWorking = false,
     bool IsMoving = false,
     Vector2 MoveTarget = default,
@@ -18,6 +20,21 @@ internal sealed record SpawnedPokemon(
     Vector2? HomePosition = null,
     string? SpeechText = null,
     float SpeechTimerRemaining = 0f,
+    bool ShowWorkBlockedMarker = false,
+    Vector2? WanderTarget = null,
     float IdleAnimationTimer = 0f,
     int IdleAnimationFrame = 0,
-    float IdleCyclePauseRemaining = 0f);
+    float IdleCyclePauseRemaining = 0f)
+{
+    public int GetSkillLevel(SkillType skillType)
+    {
+        if (skillType == SkillType.None || SkillLevels is null)
+        {
+            return 0;
+        }
+
+        return SkillLevels.TryGetValue(skillType, out int level)
+            ? Math.Max(0, level)
+            : 0;
+    }
+}
