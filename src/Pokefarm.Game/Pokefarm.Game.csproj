@@ -18,5 +18,11 @@
     <None Include="..\Pokefarm.Assests\*.json" Link="Assets\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Pokefarm.Assests\Pokemon Models\**\*.png" Link="Assets\Pokemon Models\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Pokefarm.Assests\Pokemon Models\**\*.json" Link="Assets\Pokemon Models\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

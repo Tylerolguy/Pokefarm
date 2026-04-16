@@ -35,6 +35,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private const float SpawnedPokemonMinMoveDelay = 2f;
     private const float SpawnedPokemonMaxMoveDelay = 4f;
     private const float SpawnedPokemonMoveDuration = 0.3f;
+    private const string PlayerPokemonName = "Ditto";
+    private const float TalkExitDelaySeconds = 1f;
+    private static readonly Color UnclaimedMarkerBackground = new(30, 20, 14, 230);
+    private static readonly Color UnclaimedMarkerText = new(236, 220, 196);
 
     private readonly GraphicsDeviceManager _graphics;
     private readonly Rectangle _worldBounds = new(0, 0, WorldWidth, WorldHeight);
@@ -57,9 +61,9 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private Texture2D? _circleTexture;
-    private Texture2D? _playerSpriteSheet;
-    private Texture2D? _spawnedPokemonSpriteSheet;
-    private Texture2D? _activeTalkIcon;
+    private readonly Dictionary<string, Texture2D?> _pokemonSpriteSheets = [];
+    private readonly Dictionary<string, Dictionary<string, SpriteFrame>> _pokemonFrames = [];
+    private readonly HashSet<string> _pokemonSpriteLoadAttempted = [];
     private Vector2 _playerPosition = new(200f, 200f);
     private Vector2 _playerMovement;
     private Matrix _cameraMatrix = Matrix.Identity;
@@ -71,27 +75,20 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private PlacedItem? _removeTarget;
     private PlacedItem? _interactTarget;
     private int _talkTargetIndex = -1;
-    private int _activeTalkPokemonIndex = -1;
     private Rectangle _removeSelectorBounds;
     private InputMode _inputMode;
     private Direction _playerDirection = Direction.Down;
     private float _walkAnimationTimer;
     private int _walkAnimationFrame;
     private int _selectedCraftingIndex;
-    private int _selectedTalkOption;
-    private string _activeTalkText = "HI!";
-    private List<PokemonDialogueOption> _activeTalkOptions = [];
-    private string _activeTalkSpeakerName = "SEWADDLE";
-    private PlacedItem? _activeTalkBuilding;
+    private readonly TalkState _talkState = new();
     private CraftingSource _activeCraftingSource = CraftingSource.HandheldCrafting;
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
     private float _dialogueTransition;
+    private float _talkExitTimer;
     private string? _interactionMessage;
     private int _nextPokemonId = 1;
-    private string? _activeTalkIconName;
-    private Dictionary<string, SpriteFrame> _playerFrames = [];
-    private Dictionary<string, SpriteFrame> _spawnedPokemonFrames = [];
     private static readonly Dictionary<char, string[]> PixelFont = new()
     {
         ['A'] = ["01110","10001","10001","11111","10001","10001","10001"],
@@ -150,8 +147,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _pixel = new Texture2D(GraphicsDevice, 1, 1);
         _pixel.SetData(new[] { Color.White });
         _circleTexture = CreateCircleTexture(DefaultIconSize);
-        LoadPlayerSprite();
-        LoadSpawnedPokemonSprite();
+        EnsurePokemonSpriteLoaded(PlayerPokemonName);
     }
 
     protected override void Update(GameTime gameTime)
@@ -270,16 +266,27 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
         else if (_inputMode == InputMode.Talking)
         {
-            UpdateTalkNavigation(moveUpPressed, moveDownPressed);
-
-            if (talkPressed)
+            if (_talkExitTimer > 0f)
             {
-                ExitTalkMode();
+                _talkExitTimer = Math.Max(0f, _talkExitTimer - deltaTime);
+                if (_talkExitTimer <= 0f)
+                {
+                    ExitTalkMode();
+                }
             }
-
-            if (confirmPressed)
+            else
             {
-                ConfirmTalkOption();
+                UpdateTalkNavigation(moveUpPressed, moveDownPressed);
+
+                if (talkPressed)
+                {
+                    ExitTalkMode();
+                }
+
+                if (confirmPressed)
+                {
+                    ConfirmTalkOption();
+                }
             }
         }
         else
@@ -458,8 +465,30 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         foreach (SpawnedPokemon pokemon in _spawnedDittos)
         {
-            DrawPokemonAt(pokemon.Position, _spawnedPokemonSpriteSheet, _spawnedPokemonFrames, pokemon.Direction);
+            DrawPokemonAt(pokemon.Position, pokemon.Name, pokemon.Direction);
+            DrawUnclaimedMarker(pokemon);
         }
+    }
+
+    private void DrawUnclaimedMarker(SpawnedPokemon pokemon)
+    {
+        if (_spriteBatch is null || _pixel is null || pokemon.IsClaimed)
+        {
+            return;
+        }
+
+        Point textSize = MeasurePixelText("!", UiFontPixelSize, UiFontSpacing);
+        int markerX = (int)pokemon.Position.X + (PlayerSize / 2);
+        int markerY = (int)pokemon.Position.Y - 18;
+        Rectangle panel = new(
+            markerX - (textSize.X / 2) - 5,
+            markerY - (textSize.Y / 2) - 3,
+            textSize.X + 10,
+            textSize.Y + 6);
+
+        _spriteBatch.Draw(_pixel, panel, UnclaimedMarkerBackground);
+        DrawPanelBorder(panel, new Color(181, 138, 95));
+        DrawPixelText("!", new Vector2(panel.X + 5, panel.Y + 3), UnclaimedMarkerText);
     }
 
     private void DrawRemovalPreview()
@@ -708,19 +737,33 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
     private void DrawPlayer()
     {
-        DrawPokemonAt(_playerPosition, _playerSpriteSheet, _playerFrames, _playerDirection, _playerMovement != Vector2.Zero, _walkAnimationFrame);
+        DrawPokemonAt(_playerPosition, PlayerPokemonName, _playerDirection, _playerMovement != Vector2.Zero, _walkAnimationFrame);
     }
 
     private void DrawPokemonAt(
         Vector2 topLeftPosition,
-        Texture2D? spriteSheet,
-        Dictionary<string, SpriteFrame> frames,
+        string pokemonName,
         Direction direction = Direction.Down,
         bool isWalking = false,
         int walkFrame = 0)
     {
-        if (_spriteBatch is null || spriteSheet is null)
+        if (_spriteBatch is null)
         {
+            return;
+        }
+
+        if (!TryGetPokemonSpriteData(pokemonName, out Texture2D? spriteSheet, out Dictionary<string, SpriteFrame>? frames) ||
+            spriteSheet is null ||
+            frames is null)
+        {
+            if (_pixel is not null)
+            {
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle((int)topLeftPosition.X, (int)topLeftPosition.Y, PlayerSize, PlayerSize),
+                    Color.CornflowerBlue);
+            }
+
             return;
         }
 
@@ -793,8 +836,8 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         Rectangle iconPanel = new(panel.X + 18, panel.Y + 15, 97, 97);
         Rectangle textPanel = new(iconPanel.Right + 18, panel.Y + 15, panel.Width - 97 - 265 - 72, 97);
         Rectangle optionsPanel = new(textPanel.Right + 18, panel.Y + 15, 205, 97);
-        List<PokemonDialogueOption> options = _activeTalkOptions;
-        int scrollOffset = Math.Clamp(_selectedTalkOption - VisibleTalkOptionCount + 1, 0, Math.Max(0, options.Count - VisibleTalkOptionCount));
+        List<PokemonDialogueOption> options = _talkState.Options;
+        int scrollOffset = Math.Clamp(_talkState.SelectedOptionIndex - VisibleTalkOptionCount + 1, 0, Math.Max(0, options.Count - VisibleTalkOptionCount));
 
         _spriteBatch.Draw(_pixel, panel, new Color(44, 31, 23, 245));
         DrawPanelBorder(panel, new Color(181, 138, 95));
@@ -802,9 +845,9 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         _spriteBatch.Draw(_pixel, iconPanel, new Color(58, 43, 33));
         DrawPanelBorder(iconPanel, new Color(120, 90, 65));
         Rectangle portraitBounds = new(iconPanel.X + 17, iconPanel.Y + 13, 64, 64);
-        if (_activeTalkIcon is not null)
+        if (_talkState.IconTexture is not null)
         {
-            _spriteBatch.Draw(_activeTalkIcon, portraitBounds, Color.White);
+            _spriteBatch.Draw(_talkState.IconTexture, portraitBounds, Color.White);
         }
         else
         {
@@ -812,11 +855,11 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         DrawPanelBorder(portraitBounds, new Color(236, 220, 196));
-        DrawPixelText(_activeTalkSpeakerName.ToUpperInvariant(), new Vector2(iconPanel.X + 8, iconPanel.Bottom - 19), new Color(236, 220, 196));
+        DrawPixelText(_talkState.SpeakerName.ToUpperInvariant(), new Vector2(iconPanel.X + 8, iconPanel.Bottom - 19), new Color(236, 220, 196));
 
         _spriteBatch.Draw(_pixel, textPanel, new Color(58, 43, 33));
         DrawPanelBorder(textPanel, new Color(120, 90, 65));
-        DrawPixelText(_activeTalkText, new Vector2(textPanel.X + 16, textPanel.Y + 18), new Color(236, 220, 196));
+        DrawPixelText(_talkState.Text, new Vector2(textPanel.X + 16, textPanel.Y + 18), new Color(236, 220, 196));
 
         _spriteBatch.Draw(_pixel, optionsPanel, new Color(58, 43, 33));
         DrawPanelBorder(optionsPanel, new Color(120, 90, 65));
@@ -841,7 +884,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             Rectangle optionBounds = new(optionsPanel.X + 10, optionsPanel.Y + 28 + (visibleIndex * 20), optionsPanel.Width - 30, 16);
-            bool selected = optionIndex == _selectedTalkOption;
+            bool selected = optionIndex == _talkState.SelectedOptionIndex;
 
             _spriteBatch.Draw(_pixel, optionBounds, selected ? new Color(88, 66, 49) : new Color(58, 43, 33));
             DrawPanelBorder(optionBounds, selected ? Color.Gold : new Color(120, 90, 65));
@@ -955,9 +998,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
             Vector2 spawnPosition = new(
                 item.Bounds.Center.X - (PlayerSize / 2f),
                 item.Bounds.Center.Y - (PlayerSize / 2f));
+            string spawnName = SnackSpawnCatalog.RollSpawnName(item.Definition);
             _spawnedDittos.Add(new SpawnedPokemon(
                 _nextPokemonId++,
-                "Sewaddle",
+                spawnName,
                 spawnPosition,
                 Direction.Down,
                 GetRandomMoveDelaySeconds()));
@@ -975,7 +1019,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         for (int index = 0; index < _spawnedDittos.Count; index++)
         {
             SpawnedPokemon pokemon = _spawnedDittos[index];
-            if (_inputMode == InputMode.Talking && index == _activeTalkPokemonIndex)
+            if (_inputMode == InputMode.Talking && index == _talkState.ActivePokemonIndex)
             {
                 Direction facePlayerDirection = GetDirectionTowardTarget(pokemon.Position, _playerPosition);
                 _spawnedDittos[index] = pokemon with
@@ -997,6 +1041,18 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                     SpeechText = speechTimeRemaining > 0f ? pokemon.SpeechText : null
                 };
                 _spawnedDittos[index] = pokemon;
+            }
+
+            if (!pokemon.IsClaimed)
+            {
+                _spawnedDittos[index] = pokemon with
+                {
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveTarget = pokemon.Position,
+                    MoveCooldownRemaining = 0f
+                };
+                continue;
             }
 
             if (pokemon.IsMoving)
@@ -1580,11 +1636,12 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         FaceConversationTarget(_spawnedDittos[_talkTargetIndex].Position);
         FacePokemonTowardPlayer(_talkTargetIndex);
-        _activeTalkPokemonIndex = _talkTargetIndex;
-        _selectedTalkOption = 0;
-        _activeTalkText = PokemonDialogueService.GetOpeningText(_spawnedDittos[_talkTargetIndex]);
-        _activeTalkOptions = PokemonDialogueService.GetOptions(_spawnedDittos[_talkTargetIndex]);
-        _activeTalkSpeakerName = _spawnedDittos[_talkTargetIndex].Name;
+        _talkState.BeginPokemonTalk(
+            _talkTargetIndex,
+            PokemonDialogueService.GetOpeningText(_spawnedDittos[_talkTargetIndex]),
+            PokemonDialogueService.GetOptions(_spawnedDittos[_talkTargetIndex]),
+            _spawnedDittos[_talkTargetIndex].Name);
+        _talkExitTimer = 0f;
         SetActiveTalkIcon(_spawnedDittos[_talkTargetIndex].Name);
         _inputMode = InputMode.Talking;
     }
@@ -1620,12 +1677,12 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     private void OpenBuildingTalk(PlacedItem building)
     {
         FaceConversationTarget(new Vector2(building.Bounds.Center.X, building.Bounds.Center.Y));
-        _activeTalkPokemonIndex = -1;
-        _activeTalkBuilding = building;
-        _selectedTalkOption = 0;
-        _activeTalkText = $"WHAT SHOULD I DO WITH THIS {building.Definition.Name.ToUpperInvariant()}";
-        _activeTalkOptions = GetBuildingTalkOptions(building);
-        _activeTalkSpeakerName = "DITTO";
+        _talkState.BeginBuildingTalk(
+            building,
+            $"WHAT SHOULD I DO WITH THIS {building.Definition.Name.ToUpperInvariant()}",
+            GetBuildingTalkOptions(building),
+            "DITTO");
+        _talkExitTimer = 0f;
         SetActiveTalkIcon("Ditto");
         _inputMode = InputMode.Talking;
     }
@@ -1703,76 +1760,124 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
     {
         if (moveUp)
         {
-            _selectedTalkOption = Math.Max(0, _selectedTalkOption - 1);
+            _talkState.MoveSelection(-1);
         }
 
         if (moveDown)
         {
-            _selectedTalkOption = Math.Min(_activeTalkOptions.Count - 1, _selectedTalkOption + 1);
+            _talkState.MoveSelection(1);
         }
     }
 
     private void ConfirmTalkOption()
     {
-        if (_selectedTalkOption < 0 || _selectedTalkOption >= _activeTalkOptions.Count)
+        PokemonDialogueOption? selectedOption = _talkState.GetSelectedOption();
+        if (selectedOption is null)
         {
             ExitTalkMode();
             return;
         }
 
-        PokemonDialogueOption selectedOption = _activeTalkOptions[_selectedTalkOption];
-
         if (selectedOption.Action == PokemonDialogueAction.ToggleFollowing)
         {
-            if (_activeTalkPokemonIndex < 0 || _activeTalkPokemonIndex >= _spawnedDittos.Count)
+            if (_talkState.ActivePokemonIndex < 0 || _talkState.ActivePokemonIndex >= _spawnedDittos.Count)
             {
                 ExitTalkMode();
                 return;
             }
 
-            SpawnedPokemon pokemon = _spawnedDittos[_activeTalkPokemonIndex];
+            SpawnedPokemon pokemon = _spawnedDittos[_talkState.ActivePokemonIndex];
+            bool willFollowPlayer = !pokemon.IsFollowingPlayer;
             pokemon = pokemon with
             {
-                IsFollowingPlayer = !pokemon.IsFollowingPlayer,
+                IsFollowingPlayer = willFollowPlayer,
                 MoveCooldownRemaining = pokemon.IsFollowingPlayer ? GetRandomMoveDelaySeconds() : 0f,
                 IsMoving = false,
                 MoveTimeRemaining = 0f,
                 MoveTarget = pokemon.Position
             };
 
-            _spawnedDittos[_activeTalkPokemonIndex] = pokemon;
-            _activeTalkOptions = PokemonDialogueService.GetOptions(pokemon);
-            ExitTalkMode();
+            _spawnedDittos[_talkState.ActivePokemonIndex] = pokemon;
+            _talkState.SetOptions(PokemonDialogueService.GetOptions(pokemon));
+            if (!string.IsNullOrEmpty(selectedOption.ResponseText))
+            {
+                _talkState.SetText(selectedOption.ResponseText);
+            }
+
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+
             return;
         }
 
         if (selectedOption.Action == PokemonDialogueAction.SetHome && selectedOption.TargetPokemonId.HasValue)
         {
             AssignPokemonHome(selectedOption.TargetPokemonId.Value);
-            ExitTalkMode();
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+            else
+            {
+                ExitTalkMode();
+            }
             return;
         }
 
         if (selectedOption.Action == PokemonDialogueAction.SetText && !string.IsNullOrEmpty(selectedOption.ResponseText))
         {
-            _activeTalkText = selectedOption.ResponseText;
+            _talkState.SetText(selectedOption.ResponseText);
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.Exit)
+        {
+            if (!string.IsNullOrEmpty(selectedOption.ResponseText))
+            {
+                _talkState.SetText(selectedOption.ResponseText);
+            }
+
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
+            }
+            else
+            {
+                ExitTalkMode();
+            }
+
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.None)
+        {
+            if (!string.IsNullOrEmpty(selectedOption.ResponseText))
+            {
+                _talkState.SetText(selectedOption.ResponseText);
+            }
+
             return;
         }
 
         ExitTalkMode();
     }
 
+    private void BeginTalkExitCountdown()
+    {
+        _talkExitTimer = TalkExitDelaySeconds;
+    }
+
     private void ExitTalkMode()
     {
         _inputMode = InputMode.Gameplay;
-        _activeTalkPokemonIndex = -1;
-        _selectedTalkOption = 0;
-        _activeTalkText = "HI!";
-        _activeTalkOptions = [];
-        _activeTalkSpeakerName = "SEWADDLE";
-        _activeTalkBuilding = null;
-        _activeTalkIcon = null;
-        _activeTalkIconName = null;
+        _talkExitTimer = 0f;
+        _talkState.Reset();
     }
 
     private List<PokemonDialogueOption> GetBuildingTalkOptions(PlacedItem building)
@@ -1800,7 +1905,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
     private void AssignPokemonHome(int pokemonId)
     {
-        if (_activeTalkBuilding is null || _activeTalkBuilding.Definition != ItemCatalog.Bed)
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Bed)
         {
             return;
         }
@@ -1812,9 +1917,10 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
-        Vector2 homePosition = GetBedHomePosition(_activeTalkBuilding);
+        Vector2 homePosition = GetBedHomePosition(_talkState.ActiveBuilding);
         _spawnedDittos[pokemonIndex] = pokemon with
         {
+            IsClaimed = true,
             IsFollowingPlayer = false,
             IsMoving = false,
             MoveTimeRemaining = 0f,
@@ -1826,7 +1932,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
         ClearExistingBedForPokemon(pokemon.PokemonId);
 
-        int bedIndex = _placedItems.FindIndex(item => item == _activeTalkBuilding);
+        int bedIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
         if (bedIndex >= 0)
         {
             PlacedItem bed = _placedItems[bedIndex];
@@ -1836,7 +1942,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
                 ResidentPokemonId = pokemon.PokemonId
             };
             _interactTarget = _placedItems[bedIndex];
-            _activeTalkBuilding = _placedItems[bedIndex];
+            _talkState.UpdateBuildingReference(_placedItems[bedIndex]);
         }
 
         _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} MOVED IN";
@@ -1845,13 +1951,12 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
 
     private void SetActiveTalkIcon(string pokemonName)
     {
-        if (_activeTalkIconName == pokemonName)
+        if (_talkState.IconName == pokemonName)
         {
             return;
         }
 
-        _activeTalkIcon = null;
-        _activeTalkIconName = pokemonName;
+        _talkState.SetIcon(pokemonName, null);
         string iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", $"{pokemonName}Icon.png");
         if (!File.Exists(iconPath))
         {
@@ -1859,7 +1964,7 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         using FileStream iconStream = File.OpenRead(iconPath);
-        _activeTalkIcon = Texture2D.FromStream(GraphicsDevice, iconStream);
+        _talkState.SetIcon(pokemonName, Texture2D.FromStream(GraphicsDevice, iconStream));
     }
 
     private void FaceConversationTarget(Vector2 targetPosition)
@@ -2082,24 +2187,44 @@ public sealed class FarmGame : Microsoft.Xna.Framework.Game
         return texture;
     }
 
-    private void LoadPlayerSprite()
+    private bool TryGetPokemonSpriteData(
+        string pokemonName,
+        out Texture2D? spriteSheet,
+        out Dictionary<string, SpriteFrame>? frames)
     {
-        string assetDirectory = Path.Combine(AppContext.BaseDirectory, "Assets");
-        LoadSpriteSet(
-            Path.Combine(assetDirectory, "0132.png"),
-            Path.Combine(assetDirectory, "0132.json"),
-            out _playerSpriteSheet,
-            _playerFrames);
+        EnsurePokemonSpriteLoaded(pokemonName);
+        if (_pokemonSpriteSheets.TryGetValue(pokemonName, out spriteSheet) &&
+            _pokemonFrames.TryGetValue(pokemonName, out frames))
+        {
+            return true;
+        }
+
+        frames = null;
+        spriteSheet = null;
+        return false;
     }
 
-    private void LoadSpawnedPokemonSprite()
+    private void EnsurePokemonSpriteLoaded(string pokemonName)
     {
-        string assetDirectory = Path.Combine(AppContext.BaseDirectory, "Assets");
-        LoadSpriteSet(
-            Path.Combine(assetDirectory, "0540.png"),
-            Path.Combine(assetDirectory, "0540.json"),
-            out _spawnedPokemonSpriteSheet,
-            _spawnedPokemonFrames);
+        if (_pokemonSpriteLoadAttempted.Contains(pokemonName))
+        {
+            return;
+        }
+
+        _pokemonSpriteLoadAttempted.Add(pokemonName);
+        string assetDirectory = Path.Combine(AppContext.BaseDirectory, "Assets", "Pokemon Models");
+        string spritePath = Path.Combine(assetDirectory, $"{pokemonName}.png");
+        string atlasPath = Path.Combine(assetDirectory, $"{pokemonName}.json");
+
+        Dictionary<string, SpriteFrame> frames = [];
+        LoadSpriteSet(spritePath, atlasPath, out Texture2D? spriteSheet, frames);
+        if (spriteSheet is null || frames.Count == 0)
+        {
+            return;
+        }
+
+        _pokemonSpriteSheets[pokemonName] = spriteSheet;
+        _pokemonFrames[pokemonName] = frames;
     }
 
     private void LoadSpriteSet(

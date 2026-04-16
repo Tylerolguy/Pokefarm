@@ -11,6 +11,7 @@ internal sealed record SpawnedPokemon(
     bool IsMoving = false,
     Vector2 MoveTarget = default,
     float MoveTimeRemaining = 0f,
+    bool IsClaimed = false,
     bool IsFollowingPlayer = false,
     Vector2? HomePosition = null,
     string? SpeechText = null,
