@@ -24,8 +24,15 @@ internal sealed record PlacedItem(
     int ProductionStepIndex = 0,
     ItemDefinition? FarmGrowingPlant = null,
     ItemDefinition? WorkbenchQueuedItem = null,
+    int WorkbenchQueuedQuantity = 0,
+    ItemDefinition? WorkbenchQueuedItem2 = null,
+    int WorkbenchQueuedQuantity2 = 0,
+    ItemDefinition? WorkbenchQueuedItem3 = null,
+    int WorkbenchQueuedQuantity3 = 0,
     float WorkbenchCraftEffortRemaining = 0f,
-    float WorkbenchCraftEffortRequired = 0f)
+    float WorkbenchCraftEffortRequired = 0f,
+    ItemDefinition? WorkbenchStoredItem = null,
+    int WorkbenchStoredQuantity = 0)
 {
     // Computes and returns age Seconds without mutating persistent game state.
     public double GetAgeSeconds(double currentWorldTimeSeconds) => Math.Max(0d, currentWorldTimeSeconds - PlacedAtWorldTimeSeconds);

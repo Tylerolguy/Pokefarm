@@ -1,5 +1,6 @@
 using Microsoft.Xna.Framework;
 using static Pokefarm.Game.BuildingWorkerHelpers;
+using static Pokefarm.Game.WorkbenchCraftingHelpers;
 
 namespace Pokefarm.Game;
 
@@ -82,7 +83,9 @@ public sealed partial class FarmGame
         }
 
         PlacedItem workbench = _placedItems[workbenchIndex];
-        if (workbench.WorkbenchQueuedItem is null)
+        ItemDefinition? activeQueuedItem = GetActiveWorkbenchQueuedItem(workbench);
+        int activeQueuedQuantity = GetActiveWorkbenchQueuedQuantity(workbench);
+        if (!HasWorkbenchQueuedItems(workbench) || activeQueuedItem is null || activeQueuedQuantity <= 0)
         {
             _talkState.SetText("NOTHING QUEUED");
             return;
@@ -90,11 +93,14 @@ public sealed partial class FarmGame
 
         RecipeDefinition? queuedRecipe = _unlockedRecipes.FirstOrDefault(recipe =>
             recipe.Source == CraftingSource.BasicWorkBenchCrafting &&
-            recipe.Output == workbench.WorkbenchQueuedItem);
+            recipe.Output == activeQueuedItem);
 
         if (queuedRecipe is not null)
         {
-            if (!CanAddInventoryItems(queuedRecipe.Costs.Select(cost => cost.Item)))
+            int queuedQuantity = Math.Max(1, activeQueuedQuantity);
+            IEnumerable<ItemDefinition> refundItems = queuedRecipe.Costs
+                .SelectMany(cost => Enumerable.Repeat(cost.Item, cost.Quantity * queuedQuantity));
+            if (!CanAddInventoryItems(refundItems))
             {
                 _talkState.SetText("INVENTORY FULL");
                 _interactionMessage = "INVENTORY FULL";
@@ -104,15 +110,20 @@ public sealed partial class FarmGame
 
             foreach (RecipeCost cost in queuedRecipe.Costs)
             {
-                AddInventoryItem(cost.Item, cost.Quantity);
+                AddInventoryItem(cost.Item, cost.Quantity * queuedQuantity);
             }
         }
 
-        _placedItems[workbenchIndex] = workbench with
+        PlacedItem updatedWorkbench = SetWorkbenchQueueSlot(workbench, 0, null, 0);
+        updatedWorkbench = CompressWorkbenchQueue(updatedWorkbench);
+        ItemDefinition? nextQueuedItem = GetActiveWorkbenchQueuedItem(updatedWorkbench);
+        float nextEffort = nextQueuedItem is not null
+            ? GetWorkbenchCraftEffortRequired(nextQueuedItem)
+            : 0f;
+        _placedItems[workbenchIndex] = updatedWorkbench with
         {
-            WorkbenchQueuedItem = null,
-            WorkbenchCraftEffortRemaining = 0f,
-            WorkbenchCraftEffortRequired = 0f
+            WorkbenchCraftEffortRemaining = nextQueuedItem is not null ? nextEffort : 0f,
+            WorkbenchCraftEffortRequired = nextQueuedItem is not null ? nextEffort : 0f
         };
 
         _interactTarget = _placedItems[workbenchIndex];

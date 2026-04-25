@@ -284,7 +284,7 @@ public sealed partial class FarmGame
     // Draws workbench Crafting Progress Circle for the current frame using the active render context.
     private void DrawWorkbenchCraftingProgressCircle(PlacedItem workbench)
     {
-        if (workbench.WorkbenchQueuedItem is null || workbench.WorkbenchCraftEffortRequired <= 0f)
+        if (!HasWorkbenchQueuedItems(workbench) || workbench.WorkbenchCraftEffortRequired <= 0f)
         {
             return;
         }
@@ -626,15 +626,12 @@ public sealed partial class FarmGame
             _placedItems[_activeWorkbenchIndex].Definition == ItemCatalog.WorkBench)
         {
             PlacedItem workbench = _placedItems[_activeWorkbenchIndex];
-            string queuedText = workbench.WorkbenchQueuedItem is null
-                ? "QUEUED: NONE"
-                : $"QUEUED: {workbench.WorkbenchQueuedItem.Name.ToUpperInvariant()}";
+            string queuedText = GetWorkbenchQueueStatusText(workbench);
             DrawPixelText(queuedText, new Vector2(panel.X + 24, panel.Y + 44), new Color(210, 190, 164));
 
-            ItemDefinition? completedItem = IsWorkbenchItemReady(workbench) ? workbench.WorkbenchQueuedItem : null;
-            string completedText = completedItem is not null
-                ? $"COMPLETED: {completedItem.Name.ToUpperInvariant()}"
-                : "COMPLETED: NONE";
+            string completedText = HasWorkbenchStoredItems(workbench) && workbench.WorkbenchStoredItem is not null
+                ? $"STORED: {workbench.WorkbenchStoredItem.Name.ToUpperInvariant()} X{workbench.WorkbenchStoredQuantity}/{GetWorkbenchStorageCapacity(workbench)}"
+                : $"STORED: NONE 0/{GetWorkbenchStorageCapacity(workbench)}";
             DrawPixelText(completedText, new Vector2(panel.X + 24, panel.Y + 62), new Color(196, 226, 180));
         }
         else if (_activeCraftingSource == CraftingSource.FarmGrowing &&
@@ -700,6 +697,27 @@ public sealed partial class FarmGame
                 new Vector2(rowBounds.Right - 142, rowBounds.Y + 34),
                 canCraft ? new Color(224, 210, 158) : new Color(180, 130, 110));
         }
+    }
+
+    // Builds a compact queue summary that shows each visible slot and quantity on the active workbench.
+    private static string GetWorkbenchQueueStatusText(PlacedItem workbench)
+    {
+        int capacity = GetWorkbenchQueueCapacity(workbench);
+        List<string> parts = [];
+        for (int slotIndex = 0; slotIndex < capacity; slotIndex++)
+        {
+            ItemDefinition? queuedItem = GetWorkbenchQueuedItemAtSlot(workbench, slotIndex);
+            int queuedQuantity = GetWorkbenchQueuedQuantityAtSlot(workbench, slotIndex);
+            if (queuedItem is null || queuedQuantity <= 0)
+            {
+                parts.Add($"{slotIndex + 1}:EMPTY");
+                continue;
+            }
+
+            parts.Add($"{slotIndex + 1}:{queuedItem.Name.ToUpperInvariant()} X{queuedQuantity}");
+        }
+
+        return parts.Count == 0 ? "QUEUE: NONE" : $"QUEUE: {string.Join(" | ", parts)}";
     }
 
     // Draws pc Menu Screen for the current frame using the active render context.

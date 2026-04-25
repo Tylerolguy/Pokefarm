@@ -58,13 +58,13 @@ internal static class BuildingDialogueService
         }
         else if (building.Definition == ItemCatalog.WorkBench)
         {
-            if (WorkbenchCraftingHelpers.IsWorkbenchItemReady(building))
+            if (WorkbenchCraftingHelpers.HasWorkbenchStoredItems(building))
             {
                 options.Add(new PokemonDialogueOption("PICKUP ITEMS", PokemonDialogueAction.CollectWorkbenchItem));
             }
 
             options.Add(new PokemonDialogueOption("QUEUE ITEMS", PokemonDialogueAction.OpenWorkbenchQueue));
-            if (building.WorkbenchQueuedItem is not null && !WorkbenchCraftingHelpers.IsWorkbenchItemReady(building))
+            if (WorkbenchCraftingHelpers.HasWorkbenchQueuedItems(building))
             {
                 options.Add(new PokemonDialogueOption("DEQUEUE ITEMS", PokemonDialogueAction.DequeueWorkbenchItem));
             }

@@ -19,7 +19,9 @@ internal sealed record ItemDefinition(
     int MaxWorkers = 1,
     Point ExitSize = default,
     int BedCapacity = 1,
-    int RequiredSkillLevel = 1)
+    int RequiredSkillLevel = 1,
+    int WorkbenchQueueSlots = 1,
+    int WorkbenchStorageCapacity = 1)
 {
     public bool IsBuildingLike => Kind == ItemKind.Building || Kind == ItemKind.ResourceProductionBuilding;
 

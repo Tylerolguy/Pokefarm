@@ -61,7 +61,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     [
         new(ItemCatalog.Bed, 3),
         new(ItemCatalog.WorkBench, 1),
-        new(ItemCatalog.Tree, 2),
+        new(ItemCatalog.Wood, 30),
         new(ItemCatalog.Farm, 1),
         new(ItemCatalog.BasicSnack, 12),
         new(ItemCatalog.BasicSnack2, 11),
@@ -1215,16 +1215,45 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     {
         for (int index = 0; index < _placedItems.Count; index++)
         {
-            PlacedItem item = _placedItems[index];
+            PlacedItem item = CompressWorkbenchQueue(_placedItems[index]);
             if (item.Definition != ItemCatalog.WorkBench ||
-                item.WorkbenchQueuedItem is null ||
-                item.WorkbenchCraftEffortRemaining <= 0f)
+                !HasWorkbenchQueuedItems(item))
             {
+                _placedItems[index] = item;
+                continue;
+            }
+
+            item = TryStoreFinishedWorkbenchItem(item);
+            if (item.Definition != ItemCatalog.WorkBench || !HasWorkbenchQueuedItems(item))
+            {
+                _placedItems[index] = item;
+                continue;
+            }
+
+            if (item.WorkbenchCraftEffortRequired <= 0f || item.WorkbenchCraftEffortRemaining <= 0f)
+            {
+                ItemDefinition? activeQueuedItem = GetActiveWorkbenchQueuedItem(item);
+                if (activeQueuedItem is not null)
+                {
+                    float requiredEffort = GetWorkbenchCraftEffortRequired(activeQueuedItem);
+                    item = item with
+                    {
+                        WorkbenchCraftEffortRequired = requiredEffort,
+                        WorkbenchCraftEffortRemaining = requiredEffort
+                    };
+                }
+            }
+
+            if (HasWorkbenchStoredItems(item) &&
+                item.WorkbenchStoredQuantity >= GetWorkbenchStorageCapacity(item))
+            {
+                _placedItems[index] = item;
                 continue;
             }
 
             if (!item.WorkerPokemonId.HasValue)
             {
+                _placedItems[index] = item;
                 continue;
             }
 
@@ -1242,17 +1271,21 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             if (worker.GetSkillLevel(SkillType.Crafting) <= 0 ||
                 !IsWorkbenchWithinPokemonBedRange(worker, item))
             {
+                _placedItems[index] = item;
                 continue;
             }
 
             float effortPerSecond = worker.GetSkillLevel(SkillType.Crafting);
             float remaining = Math.Max(0f, item.WorkbenchCraftEffortRemaining - (effortPerSecond * deltaTime));
-            _placedItems[index] = item with
+            PlacedItem updatedItem = item with
             {
                 WorkbenchCraftEffortRemaining = remaining
             };
 
-            if (remaining <= 0f && _interactTarget == item)
+            updatedItem = TryStoreFinishedWorkbenchItem(updatedItem);
+            _placedItems[index] = updatedItem;
+
+            if (HasWorkbenchStoredItems(updatedItem) && _interactTarget == item)
             {
                 _interactTarget = _placedItems[index];
                 _interactionMessage = "WORKBENCH ITEM READY";
@@ -1538,7 +1571,84 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return ((long)point.X << 32) | (uint)point.Y;
     }
 
-    // Attempts to collect Ready Workbench Item and reports success so callers can handle failure without exceptions.
+    // Moves a completed craft from active workbench effort into stored output when capacity allows.
+    private static PlacedItem TryStoreFinishedWorkbenchItem(PlacedItem workbench)
+    {
+        workbench = CompressWorkbenchQueue(workbench);
+        if (!HasWorkbenchQueuedItems(workbench) ||
+            workbench.WorkbenchCraftEffortRemaining > 0f)
+        {
+            return workbench;
+        }
+
+        ItemDefinition? activeQueuedItem = GetActiveWorkbenchQueuedItem(workbench);
+        int activeQueuedQuantity = GetActiveWorkbenchQueuedQuantity(workbench);
+        if (activeQueuedItem is null || activeQueuedQuantity <= 0)
+        {
+            return workbench with
+            {
+                WorkbenchQueuedItem = null,
+                WorkbenchQueuedQuantity = 0,
+                WorkbenchQueuedItem2 = null,
+                WorkbenchQueuedQuantity2 = 0,
+                WorkbenchQueuedItem3 = null,
+                WorkbenchQueuedQuantity3 = 0,
+                WorkbenchCraftEffortRemaining = 0f,
+                WorkbenchCraftEffortRequired = 0f
+            };
+        }
+
+        int storageCapacity = Math.Max(1, GetWorkbenchStorageCapacity(workbench));
+        int storedQuantity = Math.Max(0, workbench.WorkbenchStoredQuantity);
+        if (storedQuantity >= storageCapacity)
+        {
+            return workbench;
+        }
+
+        ItemDefinition? storedItem = workbench.WorkbenchStoredItem;
+        if (storedItem is not null && storedItem != activeQueuedItem)
+        {
+            return workbench;
+        }
+
+        int remainingQueued = activeQueuedQuantity - 1;
+        PlacedItem updatedQueue = SetWorkbenchQueueSlot(
+            workbench,
+            0,
+            remainingQueued > 0 ? activeQueuedItem : null,
+            remainingQueued);
+        updatedQueue = CompressWorkbenchQueue(updatedQueue);
+
+        ItemDefinition? nextQueuedItem = GetActiveWorkbenchQueuedItem(updatedQueue);
+        float nextRequiredEffort = nextQueuedItem is not null
+            ? GetWorkbenchCraftEffortRequired(nextQueuedItem)
+            : 0f;
+
+        return updatedQueue with
+        {
+            WorkbenchStoredItem = activeQueuedItem,
+            WorkbenchStoredQuantity = storedQuantity + 1,
+            WorkbenchCraftEffortRemaining = nextQueuedItem is not null ? nextRequiredEffort : 0f,
+            WorkbenchCraftEffortRequired = nextQueuedItem is not null ? nextRequiredEffort : 0f
+        };
+    }
+
+    // Looks up craft effort for workbench recipes so queue slot changes can immediately initialize correct timers.
+    private static float GetWorkbenchCraftEffortRequired(ItemDefinition outputItem)
+    {
+        RecipeDefinition? recipe = new[]
+        {
+            RecipeCatalog.WorkBench,
+            RecipeCatalog.Bed,
+            RecipeCatalog.OranBerryPlant,
+            RecipeCatalog.NoBerryPlant
+        }.FirstOrDefault(candidate =>
+            candidate.Source == CraftingSource.BasicWorkBenchCrafting &&
+            candidate.Output == outputItem);
+        return recipe is null ? 1f : Math.Max(0.1f, recipe.CraftEffortRequired);
+    }
+
+    // Attempts to collect ready Workbench Items and reports success so callers can handle failure without exceptions.
     private bool TryCollectReadyWorkbenchItem(int workbenchIndex, out string? pickupMessage)
     {
         pickupMessage = null;
@@ -1549,27 +1659,28 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
         PlacedItem workbench = _placedItems[workbenchIndex];
         if (workbench.Definition != ItemCatalog.WorkBench ||
-            workbench.WorkbenchQueuedItem is null ||
-            !IsWorkbenchItemReady(workbench))
+            !HasWorkbenchStoredItems(workbench) ||
+            workbench.WorkbenchStoredItem is null)
         {
             return false;
         }
 
-        if (!AddInventoryItem(workbench.WorkbenchQueuedItem, 1))
+        if (!AddInventoryItem(workbench.WorkbenchStoredItem, workbench.WorkbenchStoredQuantity))
         {
             pickupMessage = "INVENTORY FULL";
             return false;
         }
 
+        int pickedUpQuantity = workbench.WorkbenchStoredQuantity;
+        ItemDefinition storedItem = workbench.WorkbenchStoredItem;
         _placedItems[workbenchIndex] = workbench with
         {
-            WorkbenchQueuedItem = null,
-            WorkbenchCraftEffortRemaining = 0f,
-            WorkbenchCraftEffortRequired = 0f
+            WorkbenchStoredItem = null,
+            WorkbenchStoredQuantity = 0
         };
 
         _interactTarget = _placedItems[workbenchIndex];
-        pickupMessage = $"PICKED UP {workbench.WorkbenchQueuedItem.Name.ToUpperInvariant()}";
+        pickupMessage = $"PICKED UP {storedItem.Name.ToUpperInvariant()} X{pickedUpQuantity}";
         return true;
     }
 
@@ -2157,18 +2268,11 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 return;
             }
 
-            if (workbench.WorkbenchQueuedItem is not null)
+            int existingSlot = FindWorkbenchQueueSlotForItem(workbench, recipe.Output);
+            if (existingSlot < 0 &&
+                GetWorkbenchQueuedItemCount(workbench) >= GetWorkbenchQueueCapacity(workbench))
             {
-                _interactionMessage = IsWorkbenchItemReady(workbench)
-                    ? "PICK UP ITEM FIRST"
-                    : "WORKBENCH BUSY";
-                _interactionMessageTimer = InteractionMessageDuration;
-                return;
-            }
-
-            if (GetWorkbenchQueuedItemCount(workbench) >= GetWorkbenchQueueCapacity(workbench))
-            {
-                _interactionMessage = "WORKBENCH BUSY";
+                _interactionMessage = "QUEUE FULL";
                 _interactionMessageTimer = InteractionMessageDuration;
                 return;
             }
@@ -2179,15 +2283,29 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             float craftEffortRequired = Math.Max(0.1f, recipe.CraftEffortRequired);
-            _placedItems[_activeWorkbenchIndex] = _placedItems[_activeWorkbenchIndex] with
+            int targetSlot = existingSlot >= 0 ? existingSlot : FindFirstOpenWorkbenchQueueSlot(workbench);
+            if (targetSlot < 0)
             {
-                WorkbenchQueuedItem = recipe.Output,
-                WorkbenchCraftEffortRemaining = craftEffortRequired,
-                WorkbenchCraftEffortRequired = craftEffortRequired
-            };
+                _interactionMessage = "QUEUE FULL";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return;
+            }
+
+            int nextQuantity = Math.Max(0, GetWorkbenchQueuedQuantityAtSlot(workbench, targetSlot)) + 1;
+            PlacedItem updatedWorkbench = SetWorkbenchQueueSlot(workbench, targetSlot, recipe.Output, nextQuantity);
+            if (!HasWorkbenchQueuedItems(workbench) || targetSlot == 0 && workbench.WorkbenchCraftEffortRemaining <= 0f)
+            {
+                updatedWorkbench = updatedWorkbench with
+                {
+                    WorkbenchCraftEffortRemaining = craftEffortRequired,
+                    WorkbenchCraftEffortRequired = craftEffortRequired
+                };
+            }
+
+            _placedItems[_activeWorkbenchIndex] = updatedWorkbench;
 
             _interactTarget = _placedItems[_activeWorkbenchIndex];
-            _interactionMessage = $"{recipe.Output.Name.ToUpperInvariant()} QUEUED";
+            _interactionMessage = $"{recipe.Output.Name.ToUpperInvariant()} QUEUED X{nextQuantity}";
             _interactionMessageTimer = InteractionMessageDuration;
             return;
         }
