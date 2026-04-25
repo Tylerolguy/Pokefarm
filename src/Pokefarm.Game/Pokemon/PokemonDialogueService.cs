@@ -21,7 +21,7 @@ internal static class PokemonDialogueService
         {
             PokemonDialogueOption findBedOption = !pokemon.IsFollowingPlayer
                 ? new("FIND A BED", PokemonDialogueAction.ToggleFollowing, "I WILL WAIT HERE UNTIL YOU FIND A BED.", ExitAfterDelay: true)
-                : new("FIND A BED", PokemonDialogueAction.SetText, "IM ALREADY WAITING FOR A BED.");
+                : new("STOP FINDING BED", PokemonDialogueAction.ToggleFollowing, "OK I WILL STOP LOOKING FOR A BED.", ExitAfterDelay: true);
 
             string skillsText = BuildSkillsText(pokemon);
             return
@@ -34,7 +34,7 @@ internal static class PokemonDialogueService
 
         PokemonDialogueOption followOption = !pokemon.IsFollowingPlayer
             ? new("FOLLOW ME", PokemonDialogueAction.ToggleFollowing, "SURE I WILL FOLLOW YOU.", ExitAfterDelay: true)
-            : new("FOLLOW ME", PokemonDialogueAction.SetText, "IM ALREADY FOLLOWING YOU.");
+            : new("STOP FOLLOWING", PokemonDialogueAction.ToggleFollowing, "OK I WILL STAY HERE.", ExitAfterDelay: true);
         string claimedSkillsText = BuildSkillsText(pokemon);
         return
         [

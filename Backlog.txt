@@ -186,6 +186,7 @@ Inverntory
 - items should have the amount of items indicated was well as there name
 - selecting a placeable item should enter placement mode with that item selected
 - pressing I exits placement mode
++ inventory interface and how many items can be seen
 
 
 Placement mode
@@ -199,7 +200,7 @@ Placement mode
     be placed down
 
 
-pickup mode
+
 
 
 Pokesnacks 
@@ -257,6 +258,11 @@ quests
     compeleted or the giver should store it because pokemon may give similar happiness quests.
 
 
+
+
+
+
+
 level
 - the level ui should be purple
 - dittos level should be reflected
@@ -270,6 +276,8 @@ Dungeon Portal
 
 dungeons
 
+
+Pickup mode
 
 chests
 - chests are building that is placed

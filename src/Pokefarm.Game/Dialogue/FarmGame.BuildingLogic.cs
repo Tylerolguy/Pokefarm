@@ -230,6 +230,8 @@ public sealed partial class FarmGame
             MoveCooldownRemaining = 0f,
             MoveTarget = pokemon.Position,
             HomePosition = homePosition,
+            WanderTarget = homePosition,
+            Direction = GetDirectionTowardTarget(pokemon.Position, homePosition),
             SpeechText = "HOME!",
             SpeechTimerRemaining = InteractionMessageDuration
         };
@@ -276,27 +278,27 @@ public sealed partial class FarmGame
     }
 
     // Assigns a Pokemon to a production building after validation and synchronizes both building and worker state.
-    private void AssignPokemonToResourceBuilding(int pokemonId)
+    private bool AssignPokemonToResourceBuilding(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
         {
-            return;
+            return false;
         }
 
         int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
         if (pokemonIndex < 0)
         {
-            return;
+            return false;
         }
 
         SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
         PlacedItem building = _talkState.ActiveBuilding;
 
-        string? assignmentFailureReason = GetResourceAssignmentFailureReason(pokemon, building);
-        if (!string.IsNullOrEmpty(assignmentFailureReason))
+        ResourceAssignmentFailureReason assignmentFailureReason = GetResourceAssignmentFailureReason(pokemon, building);
+        if (assignmentFailureReason != ResourceAssignmentFailureReason.None)
         {
-            _talkState.SetText(assignmentFailureReason);
-            return;
+            ShowAssignmentFailureDialogue(pokemon, GetResourceAssignmentFailureDialogueText(assignmentFailureReason));
+            return false;
         }
 
         ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
@@ -304,7 +306,7 @@ public sealed partial class FarmGame
         int buildingIndex = _placedItems.FindIndex(item => item == building);
         if (buildingIndex < 0)
         {
-            return;
+            return false;
         }
 
         _placedItems[buildingIndex] = AddWorkerToBuilding(_placedItems[buildingIndex], pokemon);
@@ -325,10 +327,12 @@ public sealed partial class FarmGame
 
         _interactTarget = _placedItems[buildingIndex];
         _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[buildingIndex]));
 
         _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} STARTS LUMBER WORK");
         _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} ASSIGNED TO {building.Definition.Name.ToUpperInvariant()}";
         _interactionMessageTimer = InteractionMessageDuration;
+        return true;
     }
 
     // Unassigns a worker from the active production building and safely resets worker runtime flags/position.
@@ -464,21 +468,21 @@ public sealed partial class FarmGame
     }
 
     // Computes and returns resource Assignment Failure Reason without mutating persistent game state.
-    private string? GetResourceAssignmentFailureReason(SpawnedPokemon pokemon, PlacedItem building)
+    private ResourceAssignmentFailureReason GetResourceAssignmentFailureReason(SpawnedPokemon pokemon, PlacedItem building)
     {
         if (!building.Definition.IsResourceProduction)
         {
-            return "THIS IS NOT A RESOURCE BUILDING";
+            return ResourceAssignmentFailureReason.InvalidBuilding;
         }
 
         if (pokemon.HomePosition is not Vector2)
         {
-            return "POKEMON NEEDS A BED";
+            return ResourceAssignmentFailureReason.NoBed;
         }
 
         if (!IsBuildingExitWithinPokemonBedRange(pokemon, building))
         {
-            return "BED TOO FAR";
+            return ResourceAssignmentFailureReason.BedTooFar;
         }
 
         SkillType requiredSkill = building.Definition.RequiredSkill;
@@ -488,43 +492,44 @@ public sealed partial class FarmGame
             int pokemonSkillLevel = pokemon.GetSkillLevel(requiredSkill);
             if (pokemonSkillLevel <= 0)
             {
-                return $"{pokemon.Name.ToUpperInvariant()} NEEDS {requiredSkill.ToString().ToUpperInvariant()}";
+                return ResourceAssignmentFailureReason.SkillMismatch;
             }
 
             if (pokemonSkillLevel < requiredSkillLevel)
             {
-                return $"{pokemon.Name.ToUpperInvariant()} NEEDS {requiredSkill.ToString().ToUpperInvariant()} {requiredSkillLevel}";
+                return ResourceAssignmentFailureReason.SkillTooLow;
             }
         }
 
         if (pokemon.IsAssignedToWork || pokemon.IsWorking)
         {
-            return "THIS POKEMON ALREADY HAS A JOB";
+            return ResourceAssignmentFailureReason.AlreadyWorking;
         }
 
         if (GetWorkerPokemonIds(building).Count >= Math.Max(1, building.Definition.MaxWorkers))
         {
-            return "THIS BUILDING IS FULL";
+            return ResourceAssignmentFailureReason.BuildingFull;
         }
 
         if (HasWorker(building, pokemon.PokemonId))
         {
-            return "THIS POKEMON IS ALREADY ASSIGNED HERE";
+            return ResourceAssignmentFailureReason.AlreadyAssignedHere;
         }
 
-        Rectangle exitBounds = GetResourceBuildingExitBounds(building);
-        if (exitBounds.IsEmpty)
+        return ResourceAssignmentFailureReason.None;
+    }
+
+    // Computes and returns resource Assignment Failure Dialogue Text without mutating persistent game state.
+    private static string GetResourceAssignmentFailureDialogueText(ResourceAssignmentFailureReason failureReason)
+    {
+        return failureReason switch
         {
-            return "NO VALID EXIT FOR THIS BUILDING";
-        }
-
-        int pokemonIndex = _spawnedDittos.FindIndex(candidate => candidate.PokemonId == pokemon.PokemonId);
-        if (!CanReachTargetAreaFromPosition(pokemon.Position, exitBounds, pokemonIndex))
-        {
-            return "NO PATH TO BUILDING EXIT";
-        }
-
-        return null;
+            ResourceAssignmentFailureReason.BedTooFar => "MY BED IS TOO FAR.",
+            ResourceAssignmentFailureReason.SkillMismatch => "I DONT KNOW HOW TO WORK HERE.",
+            ResourceAssignmentFailureReason.SkillTooLow => "I DONT KNOW HOW TO WORK HERE.",
+            ResourceAssignmentFailureReason.BuildingFull => "THERE IS NO ROOM FOR ME TO WORK HERE.",
+            _ => "I CANT WORK HERE RIGHT NOW."
+        };
     }
 
     // Uses the building exit point for range checks so workers can reliably travel between bed and job site.
@@ -564,5 +569,19 @@ public sealed partial class FarmGame
         }
 
         return building.Definition.ProducedMaterial;
+    }
+
+    // Failure reasons used when validating Pokemon assignment to resource buildings.
+    private enum ResourceAssignmentFailureReason
+    {
+        None,
+        InvalidBuilding,
+        NoBed,
+        BedTooFar,
+        SkillMismatch,
+        SkillTooLow,
+        AlreadyWorking,
+        BuildingFull,
+        AlreadyAssignedHere
     }
 }

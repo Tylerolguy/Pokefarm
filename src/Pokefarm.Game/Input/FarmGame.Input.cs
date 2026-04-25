@@ -539,6 +539,7 @@ public sealed partial class FarmGame
             return;
         }
 
+        ResetAssignmentFailureDialogueState();
         FaceConversationTarget(_spawnedDittos[_talkTargetIndex].Position);
         FacePokemonTowardPlayer(_talkTargetIndex);
         _talkState.BeginPokemonTalk(
@@ -595,6 +596,7 @@ public sealed partial class FarmGame
     // Enters building Talk flow and initializes transient interaction state.
     private void OpenBuildingTalk(PlacedItem building)
     {
+        ResetAssignmentFailureDialogueState();
         FaceConversationTarget(new Vector2(building.Bounds.Center.X, building.Bounds.Center.Y));
         _talkState.BeginBuildingTalk(
             building,
@@ -680,6 +682,12 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.ReturnToBuildingDialogue)
+        {
+            ReturnToBuildingDialogueAfterAssignmentFailure();
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.ToggleFollowing)
         {
             if (_talkState.ActivePokemonIndex < 0 || _talkState.ActivePokemonIndex >= _spawnedDittos.Count)
@@ -740,14 +748,10 @@ public sealed partial class FarmGame
 
         if (selectedOption.Action == PokemonDialogueAction.AssignResourceWork && selectedOption.TargetPokemonId.HasValue)
         {
-            AssignPokemonToResourceBuilding(selectedOption.TargetPokemonId.Value);
-            if (selectedOption.ExitAfterDelay)
+            bool assignedSuccessfully = AssignPokemonToResourceBuilding(selectedOption.TargetPokemonId.Value);
+            if (assignedSuccessfully && selectedOption.ExitAfterDelay)
             {
                 BeginTalkExitCountdown();
-            }
-            else
-            {
-                ExitTalkMode();
             }
             return;
         }
@@ -902,6 +906,64 @@ public sealed partial class FarmGame
         _inputMode = InputMode.Gameplay;
         _talkExitTimer = 0f;
         _talkState.Reset();
+        ResetAssignmentFailureDialogueState();
+    }
+
+    // Opens an assignment-failure sub-dialogue from the Pokemon's perspective with a single continue option.
+    private void ShowAssignmentFailureDialogue(SpawnedPokemon pokemon, string failureText)
+    {
+        if (_talkState.ActiveBuilding is null)
+        {
+            _talkState.SetText(failureText);
+            return;
+        }
+
+        _assignmentFailureReturnBuilding = _talkState.ActiveBuilding;
+        _isAssignmentFailureDialogueActive = true;
+        _talkState.BeginBuildingTalk(
+            _talkState.ActiveBuilding,
+            failureText,
+            [new PokemonDialogueOption("CONTINUE", PokemonDialogueAction.ReturnToBuildingDialogue)],
+            pokemon.Name.ToUpperInvariant());
+        SetActiveTalkIcon(pokemon.Name);
+    }
+
+    // Restores the original building dialogue after the assignment-failure sub-dialogue is acknowledged.
+    private void ReturnToBuildingDialogueAfterAssignmentFailure()
+    {
+        if (!_isAssignmentFailureDialogueActive)
+        {
+            return;
+        }
+
+        if (_assignmentFailureReturnBuilding is null)
+        {
+            ExitTalkMode();
+            return;
+        }
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _assignmentFailureReturnBuilding);
+        if (buildingIndex < 0)
+        {
+            ExitTalkMode();
+            return;
+        }
+
+        PlacedItem building = _placedItems[buildingIndex];
+        _talkState.BeginBuildingTalk(
+            building,
+            BuildingDialogueService.GetOpeningText(building),
+            GetBuildingTalkOptions(building),
+            "DITTO");
+        SetActiveTalkIcon("Ditto");
+        ResetAssignmentFailureDialogueState();
+    }
+
+    // Clears transient assignment-failure dialogue state.
+    private void ResetAssignmentFailureDialogueState()
+    {
+        _isAssignmentFailureDialogueActive = false;
+        _assignmentFailureReturnBuilding = null;
     }
 
     // Ticks crafting Navigation each frame and keeps related timers and state synchronized.

@@ -21,6 +21,7 @@ internal enum PokemonDialogueAction
     OpenPcStorage,
     OpenDungeonMenu,
     StorePokemonInPc,
+    ReturnToBuildingDialogue,
     SetText,
     Exit
 }

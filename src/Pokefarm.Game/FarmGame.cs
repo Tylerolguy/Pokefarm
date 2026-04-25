@@ -134,6 +134,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private float _dialogueTransition;
     private float _talkExitTimer;
     private string? _interactionMessage;
+    private bool _isAssignmentFailureDialogueActive;
+    private PlacedItem? _assignmentFailureReturnBuilding;
     private int _nextPokemonId = 1;
     private static readonly Dictionary<char, string[]> PixelFont = new()
     {
@@ -777,91 +779,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 _spawnedDittos[index] = pokemon;
             }
 
-            if (pokemon.IsAssignedToWork && !pokemon.IsWorking && !IsAssignedBuildingFull(pokemon.PokemonId))
-            {
-                int assignedWorkBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
-                if (assignedWorkBuildingIndex >= 0)
-                {
-                    PlacedItem assignedBuilding = _placedItems[assignedWorkBuildingIndex];
-                    Rectangle exitBounds = GetResourceBuildingExitBounds(assignedBuilding);
-                    Rectangle pokemonBounds = new((int)pokemon.Position.X, (int)pokemon.Position.Y, PlayerSize, PlayerSize);
-                    if (!exitBounds.IsEmpty && pokemonBounds.Intersects(exitBounds))
-                    {
-                        _spawnedDittos[index] = pokemon with
-                        {
-                            IsWorking = true,
-                            IsFollowingPlayer = false,
-                            IsMoving = false,
-                            MoveTimeRemaining = 0f,
-                            MoveCooldownRemaining = 0f,
-                            MoveTarget = pokemon.Position
-                        };
-                        continue;
-                    }
-
-                    if (pokemon.IsMoving)
-                    {
-                        float moveTimeRemaining = pokemon.MoveTimeRemaining - deltaTime;
-                        if (moveTimeRemaining <= 0f)
-                        {
-                            _spawnedDittos[index] = pokemon with
-                            {
-                                Position = pokemon.MoveTarget,
-                                IsMoving = false,
-                                MoveTimeRemaining = 0f,
-                                MoveTarget = pokemon.MoveTarget,
-                                IsFollowingPlayer = false,
-                                MoveCooldownRemaining = 0f
-                            };
-                        }
-                        else
-                        {
-                            float step = deltaTime / pokemon.MoveTimeRemaining;
-                            Vector2 updatedPosition = Vector2.Lerp(pokemon.Position, pokemon.MoveTarget, step);
-                            _spawnedDittos[index] = pokemon with
-                            {
-                                Position = updatedPosition,
-                                MoveTimeRemaining = moveTimeRemaining,
-                                IsFollowingPlayer = false,
-                                MoveCooldownRemaining = 0f
-                            };
-                        }
-
-                        continue;
-                    }
-
-                    SpawnedPokemon updatedPokemon = pokemon with
-                    {
-                        IsFollowingPlayer = false,
-                        MoveCooldownRemaining = 0f
-                    };
-
-                    if (TryFindPathDirectionToTargetArea(
-                        updatedPokemon.Position,
-                        exitBounds,
-                        index,
-                        out Direction pathDirection,
-                        ignoreDynamicActorCollisions: true))
-                    {
-                        Vector2 movement = DirectionToMovement(pathDirection);
-                        Vector2 candidatePosition = updatedPokemon.Position + (movement * SpawnedPokemonMoveDistance);
-                        _spawnedDittos[index] = updatedPokemon with
-                        {
-                            Direction = pathDirection,
-                            IsMoving = true,
-                            MoveTarget = candidatePosition,
-                            MoveTimeRemaining = SpawnedPokemonMoveDuration
-                        };
-                    }
-                    else
-                    {
-                        _spawnedDittos[index] = updatedPokemon;
-                    }
-
-                    continue;
-                }
-            }
-
             if (!pokemon.IsClaimed)
             {
                 pokemon = UpdateUnclaimedPokemonIdleAnimation(pokemon, deltaTime);
@@ -927,41 +844,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
-            if (pokemon.HomePosition is Vector2 homePosition &&
-                Vector2.DistanceSquared(pokemon.Position, homePosition) > HomeWanderRadius * HomeWanderRadius)
-            {
-                Rectangle homeTargetArea = new((int)homePosition.X, (int)homePosition.Y, PlayerSize, PlayerSize);
-                if (TryFindPathDirectionToTargetArea(
-                    pokemon.Position,
-                    homeTargetArea,
-                    index,
-                    out Direction homeDirection,
-                    ignoreDynamicActorCollisions: true))
-                {
-                    Vector2 movement = DirectionToMovement(homeDirection);
-                    Vector2 candidatePosition = pokemon.Position + (movement * SpawnedPokemonMoveDistance);
-                    _spawnedDittos[index] = pokemon with
-                    {
-                        Direction = homeDirection,
-                        IsMoving = true,
-                        MoveTarget = candidatePosition,
-                        MoveTimeRemaining = SpawnedPokemonMoveDuration,
-                        MoveCooldownRemaining = 0f,
-                        WanderTarget = null,
-                        ShowWorkBlockedMarker = false
-                    };
-                }
-                else
-                {
-                    _spawnedDittos[index] = pokemon with
-                    {
-                        MoveCooldownRemaining = 0f
-                    };
-                }
-
-                continue;
-            }
-
             int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
             bool hasJob = assignedBuildingIndex >= 0;
             bool jobHasWork = hasJob && HasAvailableProductionWork(_placedItems[assignedBuildingIndex]);
@@ -1009,6 +891,41 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 }
 
                 workPathBlocked = true;
+            }
+
+            if (pokemon.HomePosition is Vector2 homePosition &&
+                Vector2.DistanceSquared(pokemon.Position, homePosition) > HomeWanderRadius * HomeWanderRadius)
+            {
+                Rectangle homeTargetArea = GetHomeRangeTargetArea(homePosition);
+                if (TryFindPathDirectionToTargetArea(
+                    pokemon.Position,
+                    homeTargetArea,
+                    index,
+                    out Direction homeDirection,
+                    ignoreDynamicActorCollisions: true))
+                {
+                    Vector2 movement = DirectionToMovement(homeDirection);
+                    Vector2 candidatePosition = pokemon.Position + (movement * SpawnedPokemonMoveDistance);
+                    _spawnedDittos[index] = pokemon with
+                    {
+                        Direction = homeDirection,
+                        IsMoving = true,
+                        MoveTarget = candidatePosition,
+                        MoveTimeRemaining = SpawnedPokemonMoveDuration,
+                        MoveCooldownRemaining = 0f,
+                        WanderTarget = null,
+                        ShowWorkBlockedMarker = false
+                    };
+                }
+                else
+                {
+                    _spawnedDittos[index] = pokemon with
+                    {
+                        MoveCooldownRemaining = 0f
+                    };
+                }
+
+                continue;
             }
 
             float nextMoveTime = pokemon.MoveCooldownRemaining - deltaTime;
@@ -1375,19 +1292,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         return -1;
-    }
-
-    // Checks whether assigned Building Full is currently true for the active world state.
-    private bool IsAssignedBuildingFull(int pokemonId)
-    {
-        int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemonId);
-        if (assignedBuildingIndex < 0)
-        {
-            return false;
-        }
-
-        PlacedItem building = _placedItems[assignedBuildingIndex];
-        return !HasAvailableProductionWork(building);
     }
 
     // Checks whether available Production Work is currently true for the active world state.
@@ -1795,6 +1699,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         return candidateDistanceSquared > radiusSquared;
+    }
+
+    // Computes and returns home Range Target Area without mutating persistent game state.
+    private static Rectangle GetHomeRangeTargetArea(Vector2 homePosition)
+    {
+        int radius = (int)MathF.Ceiling(HomeWanderRadius);
+        int size = (radius * 2) + PlayerSize;
+        return new Rectangle(
+            (int)homePosition.X - radius,
+            (int)homePosition.Y - radius,
+            size,
+            size);
     }
 
     // Computes and returns directions Toward Target without mutating persistent game state.
