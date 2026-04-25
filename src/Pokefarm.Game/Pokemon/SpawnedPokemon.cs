@@ -22,6 +22,7 @@ internal sealed record SpawnedPokemon(
     string? SpeechText = null,
     float SpeechTimerRemaining = 0f,
     bool ShowWorkBlockedMarker = false,
+    int? AssignedConstructionSiteId = null,
     Vector2? WanderTarget = null,
     float IdleAnimationTimer = 0f,
     int IdleAnimationFrame = 0,

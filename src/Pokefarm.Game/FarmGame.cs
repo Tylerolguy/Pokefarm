@@ -12,6 +12,16 @@ namespace Pokefarm.Game;
 // Main runtime type for farm Game, coordinating state and side effects for this feature.
 public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 {
+    // Lightweight row model for the PC storage screen, combining boxed and on-farm Pokemon in one selectable list.
+    private readonly record struct PcStorageEntry(string PokemonName, bool IsStoredInPc, int StoredIndex = -1, int? PokemonId = null);
+    private enum DittoWorkType
+    {
+        None,
+        Construction,
+        Resource,
+        Workbench
+    }
+
     private const int InventoryColumns = 4;
     private const int InventoryRows = 2;
     private const int PlayerSize = 32;
@@ -127,6 +137,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _activeFarmIndex = -1;
     private int _activePcIndex = -1;
     private PcMenuScreen _activePcMenuScreen = PcMenuScreen.Quests;
+    private bool _isPcStorageActionMenuOpen;
+    private int _selectedPcStorageActionIndex;
     private GeneratedDungeon? _generatedDungeonPreview;
     private GeneratedDungeon? _activeDungeonRun;
     private int _activeDungeonRoomIndex = -1;
@@ -139,7 +151,15 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private bool _isHitboxDisplayMode;
     private bool _isAssignmentFailureDialogueActive;
     private PlacedItem? _assignmentFailureReturnBuilding;
+    private bool _isDittoWorking;
+    private int _dittoWorkBuildingIndex = -1;
+    private DittoWorkType _dittoWorkType;
+    private Rectangle _dittoWorkBuildingBounds = Rectangle.Empty;
+    private ItemDefinition? _dittoWorkBuildingDefinition;
+    private float _dittoWorkDialogueDotTimer;
+    private int _dittoWorkDialogueDotCount;
     private int _nextPokemonId = 1;
+    private int _nextConstructionSiteId = 1;
     private static readonly Dictionary<char, string[]> PixelFont = new()
     {
         ['A'] = ["01110","10001","10001","11111","10001","10001","10001"],
@@ -324,6 +344,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _playerMovement = Vector2.Zero;
         bool inventoryPressed = keyboard.IsKeyDown(Keys.I) && !_previousKeyboard.IsKeyDown(Keys.I);
         bool confirmPressed = keyboard.IsKeyDown(Keys.Space) && !_previousKeyboard.IsKeyDown(Keys.Space);
+        bool devPlacePressed = keyboard.IsKeyDown(Keys.Enter) && !_previousKeyboard.IsKeyDown(Keys.Enter);
         bool removeModePressed = keyboard.IsKeyDown(Keys.U) && !_previousKeyboard.IsKeyDown(Keys.U);
         bool interactPressed = keyboard.IsKeyDown(Keys.E) && !_previousKeyboard.IsKeyDown(Keys.E);
         bool talkPressed = keyboard.IsKeyDown(Keys.Q) && !_previousKeyboard.IsKeyDown(Keys.Q);
@@ -420,9 +441,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         {
             UpdatePlacementPreview(keyboard, gameTime, moveLeftPressed, moveRightPressed, moveUpPressed, moveDownPressed);
 
-            if (confirmPressed)
+            if (confirmPressed || devPlacePressed)
             {
-                TryPlaceSelectedItem();
+                TryPlaceSelectedItem(skipConstructionSite: devPlacePressed);
             }
         }
         else if (_inputMode == InputMode.Removal)
@@ -450,11 +471,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
         else if (_inputMode == InputMode.PcMenu)
         {
-            UpdatePcMenuNavigation(moveUpPressed, moveDownPressed);
+            UpdatePcMenuNavigation(moveUpPressed, moveDownPressed, moveLeftPressed, moveRightPressed);
 
             if (interactPressed)
             {
-                ClosePcMenu();
+                if (_isPcStorageActionMenuOpen)
+                {
+                    ClosePcStorageActionMenu();
+                }
+                else
+                {
+                    ClosePcMenu();
+                }
             }
 
             if (confirmPressed)
@@ -533,7 +561,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             _worldBounds.Height - BorderThickness - PlayerSize);
 
         UpdateExpiredSnacks();
+        UpdateDittoWorkingDialogue(deltaTime);
         UpdateAssignedWorkerActivityStates();
+        UpdateConstructionSites(deltaTime);
         UpdateResourceProduction(deltaTime);
         UpdateWorkbenchCrafting(deltaTime);
         UpdateSpawnedPokemon(deltaTime);
@@ -853,6 +883,62 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
+            int assignedConstructionSiteIndex = FindAssignedConstructionSiteIndex(pokemon.PokemonId);
+            bool hasConstructionJob = assignedConstructionSiteIndex >= 0;
+            bool constructionHasWork = hasConstructionJob && HasAvailableConstructionWork(_placedItems[assignedConstructionSiteIndex]);
+            if (constructionHasWork)
+            {
+                PlacedItem constructionSite = _placedItems[assignedConstructionSiteIndex];
+                Rectangle siteBounds = GetResourceBuildingExitBounds(constructionSite);
+                if (siteBounds.IsEmpty)
+                {
+                    siteBounds = constructionSite.Bounds;
+                }
+                Rectangle pokemonBounds = new((int)pokemon.Position.X, (int)pokemon.Position.Y, PlayerSize, PlayerSize);
+                if (pokemonBounds.Intersects(siteBounds))
+                {
+                    _spawnedDittos[index] = pokemon with
+                    {
+                        IsWorking = true,
+                        IsFollowingPlayer = false,
+                        IsMoving = false,
+                        MoveTimeRemaining = 0f,
+                        MoveCooldownRemaining = 0f,
+                        MoveTarget = pokemon.Position,
+                        ShowWorkBlockedMarker = false
+                    };
+                    continue;
+                }
+
+                if (TryFindPathDirectionToTargetArea(
+                    pokemon.Position,
+                    siteBounds,
+                    index,
+                    out Direction constructionDirection,
+                    ignoreDynamicActorCollisions: true))
+                {
+                    Vector2 movement = DirectionToMovement(constructionDirection);
+                    Vector2 candidatePosition = pokemon.Position + (movement * SpawnedPokemonMoveDistance);
+                    _spawnedDittos[index] = pokemon with
+                    {
+                        Direction = constructionDirection,
+                        IsMoving = true,
+                        MoveTarget = candidatePosition,
+                        MoveTimeRemaining = SpawnedPokemonMoveDuration,
+                        MoveCooldownRemaining = 0f,
+                        ShowWorkBlockedMarker = false
+                    };
+                    continue;
+                }
+
+                _spawnedDittos[index] = pokemon with
+                {
+                    MoveCooldownRemaining = WanderRetryDelaySeconds,
+                    ShowWorkBlockedMarker = true
+                };
+                continue;
+            }
+
             int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
             bool hasJob = assignedBuildingIndex >= 0;
             bool jobHasWork = hasJob && HasAvailableProductionWorkForPokemon(pokemon, _placedItems[assignedBuildingIndex]);
@@ -1132,6 +1218,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             PlacedItem building = _placedItems[index];
             ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
             if (!building.Definition.IsResourceProduction ||
+                building.IsConstructionSite ||
                 producedMaterial is null ||
                 building.Definition.EffortPerProducedUnit <= 0f ||
                 building.Definition.MaxStoredProducedUnits <= 0)
@@ -1141,15 +1228,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             if (building.StoredProducedUnits >= building.Definition.MaxStoredProducedUnits)
             {
+                int dittoStorageStopIndex = ResolveDittoWorkBuildingIndex();
+                if (_isDittoWorking &&
+                    _dittoWorkType == DittoWorkType.Resource &&
+                    dittoStorageStopIndex == index)
+                {
+                    StopDittoWorking();
+                }
+
                 continue;
             }
 
             List<int> workerIds = GetWorkerPokemonIds(building);
-            if (workerIds.Count == 0)
-            {
-                continue;
-            }
-
             float effortPerSecond = 0f;
             SkillType? activeFarmStageSkill = building.Definition == ItemCatalog.Farm
                 ? GetFarmStageSkill(building.ProductionStepIndex)
@@ -1169,6 +1259,21 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 else
                 {
                     effortPerSecond += GetPokemonEffortPerSecond(worker, building.Definition);
+                }
+            }
+
+            int dittoBuildingIndex = ResolveDittoWorkBuildingIndex();
+            if (_isDittoWorking &&
+                _dittoWorkType == DittoWorkType.Resource &&
+                dittoBuildingIndex == index)
+            {
+                if (activeFarmStageSkill.HasValue)
+                {
+                    effortPerSecond += GetDittoSkillLevel(activeFarmStageSkill.Value);
+                }
+                else
+                {
+                    effortPerSecond += GetDittoSkillLevel(building.Definition.RequiredSkill);
                 }
             }
 
@@ -1217,6 +1322,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         {
             PlacedItem item = CompressWorkbenchQueue(_placedItems[index]);
             if (item.Definition != ItemCatalog.WorkBench ||
+                item.IsConstructionSite ||
                 !HasWorkbenchQueuedItems(item))
             {
                 _placedItems[index] = item;
@@ -1247,35 +1353,50 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             if (HasWorkbenchStoredItems(item) &&
                 item.WorkbenchStoredQuantity >= GetWorkbenchStorageCapacity(item))
             {
-                _placedItems[index] = item;
-                continue;
-            }
-
-            if (!item.WorkerPokemonId.HasValue)
-            {
-                _placedItems[index] = item;
-                continue;
-            }
-
-            SpawnedPokemon? worker = _spawnedDittos.FirstOrDefault(pokemon => pokemon.PokemonId == item.WorkerPokemonId.Value);
-            if (worker is null)
-            {
-                _placedItems[index] = item with
+                int dittoStorageStopIndex = ResolveDittoWorkBuildingIndex();
+                if (_isDittoWorking &&
+                    _dittoWorkType == DittoWorkType.Workbench &&
+                    dittoStorageStopIndex == index)
                 {
-                    WorkerPokemonId = null,
-                    WorkerPokemonName = null
-                };
+                    StopDittoWorking();
+                }
+
+                _placedItems[index] = item;
                 continue;
             }
 
-            if (worker.GetSkillLevel(SkillType.Crafting) <= 0 ||
-                !IsWorkbenchWithinPokemonBedRange(worker, item))
+            float effortPerSecond = 0f;
+            if (item.WorkerPokemonId.HasValue)
+            {
+                SpawnedPokemon? worker = _spawnedDittos.FirstOrDefault(pokemon => pokemon.PokemonId == item.WorkerPokemonId.Value);
+                if (worker is null)
+                {
+                    item = item with
+                    {
+                        WorkerPokemonId = null,
+                        WorkerPokemonName = null
+                    };
+                }
+                else if (worker.GetSkillLevel(SkillType.Crafting) > 0 && IsWorkbenchWithinPokemonBedRange(worker, item))
+                {
+                    effortPerSecond += worker.GetSkillLevel(SkillType.Crafting);
+                }
+            }
+
+            int dittoBuildingIndex = ResolveDittoWorkBuildingIndex();
+            if (_isDittoWorking &&
+                _dittoWorkType == DittoWorkType.Workbench &&
+                dittoBuildingIndex == index)
+            {
+                effortPerSecond += GetDittoSkillLevel(SkillType.Crafting);
+            }
+
+            if (effortPerSecond <= 0f)
             {
                 _placedItems[index] = item;
                 continue;
             }
 
-            float effortPerSecond = worker.GetSkillLevel(SkillType.Crafting);
             float remaining = Math.Max(0f, item.WorkbenchCraftEffortRemaining - (effortPerSecond * deltaTime));
             PlacedItem updatedItem = item with
             {
@@ -1300,6 +1421,36 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         for (int pokemonIndex = 0; pokemonIndex < _spawnedDittos.Count; pokemonIndex++)
         {
             SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+            int assignedConstructionSiteIndex = FindAssignedConstructionSiteIndex(pokemon.PokemonId);
+            if (assignedConstructionSiteIndex >= 0)
+            {
+                PlacedItem constructionSite = _placedItems[assignedConstructionSiteIndex];
+                if (HasAvailableConstructionWork(constructionSite))
+                {
+                    _spawnedDittos[pokemonIndex] = pokemon with
+                    {
+                        IsAssignedToWork = true
+                    };
+                    continue;
+                }
+
+                Vector2 constructionIdlePosition = GetWorkerRespawnPosition(constructionSite);
+                _spawnedDittos[pokemonIndex] = pokemon with
+                {
+                    IsAssignedToWork = false,
+                    IsWorking = false,
+                    IsFollowingPlayer = false,
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                    MoveTarget = constructionIdlePosition,
+                    Position = constructionIdlePosition,
+                    AssignedConstructionSiteId = null,
+                    ShowWorkBlockedMarker = false
+                };
+                continue;
+            }
+
             int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
             if (assignedBuildingIndex < 0)
             {
@@ -1307,6 +1458,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 {
                     _spawnedDittos[pokemonIndex] = pokemon with
                     {
+                        AssignedConstructionSiteId = null,
                         IsAssignedToWork = false,
                         IsWorking = false,
                         ShowWorkBlockedMarker = false
@@ -1358,7 +1510,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         for (int buildingIndex = 0; buildingIndex < _placedItems.Count; buildingIndex++)
         {
             PlacedItem building = _placedItems[buildingIndex];
-            if (!building.Definition.IsResourceProduction || !HasWorker(building, pokemonId))
+            if (!building.Definition.IsResourceProduction || building.IsConstructionSite || !HasWorker(building, pokemonId))
             {
                 continue;
             }
@@ -1369,11 +1521,102 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return -1;
     }
 
+    // Searches current state to locate assigned Construction Site Index.
+    private int FindAssignedConstructionSiteIndex(int pokemonId)
+    {
+        SpawnedPokemon? pokemon = _spawnedDittos.FirstOrDefault(candidate => candidate.PokemonId == pokemonId);
+        if (pokemon is null || !pokemon.AssignedConstructionSiteId.HasValue)
+        {
+            return -1;
+        }
+
+        int constructionSiteId = pokemon.AssignedConstructionSiteId.Value;
+        for (int buildingIndex = 0; buildingIndex < _placedItems.Count; buildingIndex++)
+        {
+            PlacedItem building = _placedItems[buildingIndex];
+            if (!building.IsConstructionSite || building.ConstructionSiteId != constructionSiteId)
+            {
+                continue;
+            }
+
+            return buildingIndex;
+        }
+
+        return -1;
+    }
+
+    // Checks whether available Construction Work is currently true for the active world state.
+    private static bool HasAvailableConstructionWork(PlacedItem building)
+    {
+        if (!building.IsConstructionSite)
+        {
+            return false;
+        }
+
+        float requiredEffort = Math.Max(0.1f, building.Definition.ConstructionEffortRequired);
+        return building.ConstructionEffort < requiredEffort;
+    }
+
+    // Checks whether construction Skill Requirements are currently satisfied by assigned workers.
+    private bool AreConstructionRequirementsSatisfied(PlacedItem constructionSite)
+    {
+        if (!constructionSite.IsConstructionSite || !constructionSite.ConstructionSiteId.HasValue)
+        {
+            return false;
+        }
+
+        int dittoBuildingIndex = ResolveDittoWorkBuildingIndex();
+        bool dittoWorkingThisSite = _isDittoWorking &&
+                                    _dittoWorkType == DittoWorkType.Construction &&
+                                    dittoBuildingIndex >= 0 &&
+                                    dittoBuildingIndex < _placedItems.Count &&
+                                    _placedItems[dittoBuildingIndex] == constructionSite;
+        if (dittoWorkingThisSite)
+        {
+            // Ditto counts as having all construction requirements while actively working this construction site.
+            return true;
+        }
+
+        List<SpawnedPokemon> assignedWorkers = _spawnedDittos
+            .Where(pokemon => pokemon.AssignedConstructionSiteId == constructionSite.ConstructionSiteId)
+            .ToList();
+        foreach ((SkillType skillType, int requiredLevel) in GetConstructionSkillRequirements(constructionSite.Definition))
+        {
+            bool hasRequiredSkill = assignedWorkers.Any(worker => worker.GetSkillLevel(skillType) >= requiredLevel);
+            if (!hasRequiredSkill)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Computes and returns construction Skill Requirements without mutating persistent game state.
+    private static IEnumerable<(SkillType SkillType, int RequiredLevel)> GetConstructionSkillRequirements(ItemDefinition definition)
+    {
+        if (definition.ConstructionRequiredSkill1 != SkillType.None && definition.ConstructionRequiredSkillLevel1 > 0)
+        {
+            yield return (definition.ConstructionRequiredSkill1, definition.ConstructionRequiredSkillLevel1);
+        }
+
+        if (definition.ConstructionRequiredSkill2 != SkillType.None && definition.ConstructionRequiredSkillLevel2 > 0)
+        {
+            yield return (definition.ConstructionRequiredSkill2, definition.ConstructionRequiredSkillLevel2);
+        }
+
+        if (definition.ConstructionRequiredSkill3 != SkillType.None && definition.ConstructionRequiredSkillLevel3 > 0)
+        {
+            yield return (definition.ConstructionRequiredSkill3, definition.ConstructionRequiredSkillLevel3);
+        }
+    }
+
     // Checks whether available Production Work is currently true for the active world state.
     private static bool HasAvailableProductionWork(PlacedItem building)
     {
         ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
         return building.Definition.IsResourceProduction &&
+               !building.IsConstructionSite &&
                producedMaterial is not null &&
                building.StoredProducedUnits < building.Definition.MaxStoredProducedUnits;
     }
@@ -1659,6 +1902,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
         PlacedItem workbench = _placedItems[workbenchIndex];
         if (workbench.Definition != ItemCatalog.WorkBench ||
+            workbench.IsConstructionSite ||
             !HasWorkbenchStoredItems(workbench) ||
             workbench.WorkbenchStoredItem is null)
         {
@@ -1694,7 +1938,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         PlacedItem workbench = _placedItems[workbenchIndex];
-        if (workbench.Definition != ItemCatalog.WorkBench)
+        if (workbench.Definition != ItemCatalog.WorkBench || workbench.IsConstructionSite)
         {
             return false;
         }
@@ -1955,6 +2199,125 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    // Ticks construction-site progress each frame and replaces completed sites with finished buildings.
+    private void UpdateConstructionSites(float deltaTime)
+    {
+        for (int index = 0; index < _placedItems.Count; index++)
+        {
+            PlacedItem item = _placedItems[index];
+            if (!item.IsConstructionSite || !item.ConstructionSiteId.HasValue)
+            {
+                continue;
+            }
+
+            float requiredEffort = Math.Max(0.1f, item.Definition.ConstructionEffortRequired);
+            if (!AreConstructionRequirementsSatisfied(item))
+            {
+                continue;
+            }
+
+            List<SpawnedPokemon> workingBuilders = _spawnedDittos
+                .Where(pokemon => pokemon.AssignedConstructionSiteId == item.ConstructionSiteId && pokemon.IsWorking)
+                .ToList();
+
+            float effortPerSecond = 0f;
+            foreach (SpawnedPokemon worker in workingBuilders)
+            {
+                effortPerSecond += Math.Max(0f, worker.GetSkillLevel(SkillType.Construction));
+            }
+
+            int dittoBuildingIndex = ResolveDittoWorkBuildingIndex();
+            bool dittoWorkingThisSite = _isDittoWorking &&
+                                        _dittoWorkType == DittoWorkType.Construction &&
+                                        dittoBuildingIndex == index;
+            if (_isDittoWorking &&
+                _dittoWorkType == DittoWorkType.Construction &&
+                dittoBuildingIndex == index)
+            {
+                effortPerSecond += GetDittoSkillLevel(SkillType.Construction);
+            }
+
+            if (workingBuilders.Count == 0 && !dittoWorkingThisSite)
+            {
+                continue;
+            }
+
+            if (effortPerSecond <= 0f)
+            {
+                continue;
+            }
+
+            float updatedEffort = MathF.Min(requiredEffort, MathF.Max(0f, item.ConstructionEffort) + (effortPerSecond * deltaTime));
+            bool completed = updatedEffort >= requiredEffort;
+            _placedItems[index] = item with
+            {
+                ConstructionEffort = updatedEffort,
+                IsConstructionSite = !completed,
+                ConstructionSiteId = completed ? null : item.ConstructionSiteId
+            };
+
+            if (!completed)
+            {
+                if (_interactTarget == item)
+                {
+                    _interactTarget = _placedItems[index];
+                }
+
+                if (_talkState.ActiveBuilding == item)
+                {
+                    _talkState.UpdateBuildingReference(_placedItems[index]);
+                    _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[index]));
+                }
+
+                continue;
+            }
+
+            int completedSiteId = item.ConstructionSiteId.Value;
+            for (int pokemonIndex = 0; pokemonIndex < _spawnedDittos.Count; pokemonIndex++)
+            {
+                SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+                if (pokemon.AssignedConstructionSiteId != completedSiteId)
+                {
+                    continue;
+                }
+
+                _spawnedDittos[pokemonIndex] = pokemon with
+                {
+                    AssignedConstructionSiteId = null,
+                    IsAssignedToWork = false,
+                    IsWorking = false,
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                    MoveTarget = pokemon.Position
+                };
+            }
+
+            if (_interactTarget == item)
+            {
+                _interactTarget = _placedItems[index];
+            }
+
+            if (_talkState.ActiveBuilding == item)
+            {
+                _talkState.UpdateBuildingReference(_placedItems[index]);
+                _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[index]));
+                _talkState.SetText($"{item.Definition.Name.ToUpperInvariant()} IS READY");
+            }
+
+            int dittoCompletedIndex = ResolveDittoWorkBuildingIndex();
+            if (_isDittoWorking &&
+                _dittoWorkType == DittoWorkType.Construction &&
+                dittoCompletedIndex == index)
+            {
+                StopDittoWorking();
+            }
+
+            _interactionMessage = $"{item.Definition.Name.ToUpperInvariant()} CONSTRUCTION COMPLETE";
+            _interactionMessageTimer = InteractionMessageDuration;
+        }
+    }
+
     // Sets a Pokemon back to unclaimed state and clears bed/work assignment side effects.
     private void UnclaimPokemon(int pokemonId)
     {
@@ -1971,6 +2334,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _spawnedDittos[pokemonIndex] = pokemon with
         {
             IsClaimed = false,
+            AssignedConstructionSiteId = null,
             IsAssignedToWork = false,
             IsWorking = false,
             IsFollowingPlayer = false,
@@ -1999,7 +2363,229 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             building,
             _spawnedDittos,
             IsWorkbenchWithinPokemonBedRange,
-            GetProducedMaterialForBuilding);
+            GetProducedMaterialForBuilding,
+            IsDittoWorkingAtBuilding);
+    }
+
+    // Checks whether Ditto is currently working at the supplied building.
+    private bool IsDittoWorkingAtBuilding(PlacedItem building)
+    {
+        int resolvedIndex = ResolveDittoWorkBuildingIndex();
+        if (!_isDittoWorking || resolvedIndex < 0 || resolvedIndex >= _placedItems.Count)
+        {
+            return false;
+        }
+
+        return _placedItems[resolvedIndex] == building;
+    }
+
+    // Attempts to start Ditto work at the active building and reports success so callers can handle failure without exceptions.
+    private void StartDittoWorkingAtActiveBuilding()
+    {
+        if (_talkState.ActiveBuilding is null)
+        {
+            return;
+        }
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (buildingIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem building = _placedItems[buildingIndex];
+        if (!TryResolveDittoWorkType(building, out DittoWorkType workType))
+        {
+            _talkState.SetText("DITTO CANT WORK HERE");
+            return;
+        }
+
+        _isDittoWorking = true;
+        _dittoWorkBuildingIndex = buildingIndex;
+        _dittoWorkType = workType;
+        _dittoWorkBuildingBounds = building.Bounds;
+        _dittoWorkBuildingDefinition = building.Definition;
+        _dittoWorkDialogueDotTimer = 0f;
+        _dittoWorkDialogueDotCount = 0;
+
+        BeginDittoWorkingDialogue(building);
+    }
+
+    // Stops Ditto work mode and restores the previous building interaction dialogue.
+    private void StopDittoWorking()
+    {
+        if (!_isDittoWorking)
+        {
+            return;
+        }
+
+        _isDittoWorking = false;
+        _dittoWorkBuildingIndex = -1;
+        _dittoWorkType = DittoWorkType.None;
+        _dittoWorkBuildingBounds = Rectangle.Empty;
+        _dittoWorkBuildingDefinition = null;
+        _dittoWorkDialogueDotTimer = 0f;
+        _dittoWorkDialogueDotCount = 0;
+
+        if (_talkState.ActiveBuilding is null)
+        {
+            ExitTalkMode();
+            return;
+        }
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (buildingIndex < 0)
+        {
+            ExitTalkMode();
+            return;
+        }
+
+        PlacedItem building = _placedItems[buildingIndex];
+        _talkState.BeginBuildingTalk(
+            building,
+            BuildingDialogueService.GetOpeningText(building),
+            GetBuildingTalkOptions(building),
+            "DITTO");
+        SetActiveTalkIcon("Ditto");
+    }
+
+    // Updates Ditto's working dialogue line while active, animating period count every two seconds.
+    private void UpdateDittoWorkingDialogue(float deltaTime)
+    {
+        if (!_isDittoWorking || _inputMode != InputMode.Talking)
+        {
+            return;
+        }
+
+        if (ResolveDittoWorkBuildingIndex() < 0)
+        {
+            StopDittoWorking();
+            return;
+        }
+
+        _dittoWorkDialogueDotTimer += deltaTime;
+        while (_dittoWorkDialogueDotTimer >= 2f)
+        {
+            _dittoWorkDialogueDotTimer -= 2f;
+            _dittoWorkDialogueDotCount++;
+            if (_dittoWorkDialogueDotCount > 3)
+            {
+                _dittoWorkDialogueDotCount = 0;
+            }
+        }
+
+        string dots = new('.', _dittoWorkDialogueDotCount);
+        _talkState.SetText($"WORKING{dots}");
+    }
+
+    // Initializes a dedicated Ditto working dialogue with only the stop option available.
+    private void BeginDittoWorkingDialogue(PlacedItem building)
+    {
+        _inputMode = InputMode.Talking;
+        _talkExitTimer = 0f;
+        _talkState.BeginBuildingTalk(
+            building,
+            "WORKING",
+            [new PokemonDialogueOption("STOP WORKING", PokemonDialogueAction.StopDittoWork)],
+            "DITTO");
+        SetActiveTalkIcon("Ditto");
+    }
+
+    // Checks whether the building supports Ditto manual work and returns the corresponding work type.
+    private bool TryResolveDittoWorkType(PlacedItem building, out DittoWorkType workType)
+    {
+        workType = DittoWorkType.None;
+        if (building.IsConstructionSite)
+        {
+            workType = DittoWorkType.Construction;
+            return true;
+        }
+
+        if (building.Definition == ItemCatalog.WorkBench && !building.IsConstructionSite)
+        {
+            if (!HasWorkbenchQueuedItems(building))
+            {
+                _interactionMessage = "NOTHING QUEUED";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return false;
+            }
+
+            workType = DittoWorkType.Workbench;
+            return true;
+        }
+
+        if (building.Definition.IsResourceProduction && !building.IsConstructionSite)
+        {
+            workType = DittoWorkType.Resource;
+            return true;
+        }
+
+        return false;
+    }
+
+    // Computes and returns Ditto Skill Level without mutating persistent game state.
+    private static int GetDittoSkillLevel(SkillType skillType)
+    {
+        return skillType switch
+        {
+            SkillType.None => 0,
+            SkillType.Lumber => 1,
+            SkillType.Farming => 1,
+            SkillType.Water => 1,
+            SkillType.Planting => 1,
+            SkillType.Harvesting => 1,
+            SkillType.Crafting => 1,
+            SkillType.Cooking => 1,
+            SkillType.Construction => 1,
+            _ => 1
+        };
+    }
+
+    // Resolves Ditto's current target building index even if placed-item list order changed during gameplay.
+    private int ResolveDittoWorkBuildingIndex()
+    {
+        if (!_isDittoWorking)
+        {
+            return -1;
+        }
+
+        if (_dittoWorkBuildingIndex >= 0 &&
+            _dittoWorkBuildingIndex < _placedItems.Count &&
+            _dittoWorkBuildingDefinition is not null)
+        {
+            PlacedItem indexedBuilding = _placedItems[_dittoWorkBuildingIndex];
+            if (indexedBuilding.Definition == _dittoWorkBuildingDefinition &&
+                indexedBuilding.Bounds == _dittoWorkBuildingBounds)
+            {
+                return _dittoWorkBuildingIndex;
+            }
+        }
+
+        if (_dittoWorkBuildingDefinition is not null && _dittoWorkBuildingBounds != Rectangle.Empty)
+        {
+            int remappedIndex = _placedItems.FindIndex(item =>
+                item.Definition == _dittoWorkBuildingDefinition &&
+                item.Bounds == _dittoWorkBuildingBounds);
+            if (remappedIndex >= 0)
+            {
+                _dittoWorkBuildingIndex = remappedIndex;
+                return remappedIndex;
+            }
+        }
+
+        if (_talkState.ActiveBuilding is not null)
+        {
+            int activeBuildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+            if (activeBuildingIndex >= 0)
+            {
+                _dittoWorkBuildingIndex = activeBuildingIndex;
+                _dittoWorkBuildingBounds = _placedItems[activeBuildingIndex].Bounds;
+                _dittoWorkBuildingDefinition = _placedItems[activeBuildingIndex].Definition;
+                return activeBuildingIndex;
+            }
+        }
+
+        return -1;
     }
 
     // Applies active Talk Icon and keeps connected state synchronized.
@@ -2261,7 +2847,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             PlacedItem workbench = _placedItems[_activeWorkbenchIndex];
-            if (workbench.Definition != ItemCatalog.WorkBench)
+            if (workbench.Definition != ItemCatalog.WorkBench || workbench.IsConstructionSite)
             {
                 _interactionMessage = "NO WORK BENCH";
                 _interactionMessageTimer = InteractionMessageDuration;

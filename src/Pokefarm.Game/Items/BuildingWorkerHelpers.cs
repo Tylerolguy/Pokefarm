@@ -8,12 +8,23 @@ internal static class BuildingWorkerHelpers
     // Computes and returns resource Building Exit Bounds without mutating persistent game state.
     public static Rectangle GetResourceBuildingExitBounds(PlacedItem building)
     {
-        if (!building.Definition.IsBuildingLike || building.Definition.ExitSize.X <= 0 || building.Definition.ExitSize.Y <= 0)
+        if (!building.Definition.IsBuildingLike)
         {
             return Rectangle.Empty;
         }
 
         Point size = building.Definition.ExitSize;
+        if (size.X <= 0 || size.Y <= 0)
+        {
+            if (!building.IsConstructionSite)
+            {
+                return Rectangle.Empty;
+            }
+
+            // Construction sites need a reachable work point even for finished buildings that do not normally define exits.
+            size = new Point(32, 32);
+        }
+
         return new Rectangle(
             building.Bounds.Center.X - (size.X / 2),
             building.Bounds.Bottom + 2,

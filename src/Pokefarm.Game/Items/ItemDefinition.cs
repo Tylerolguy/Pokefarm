@@ -21,7 +21,14 @@ internal sealed record ItemDefinition(
     int BedCapacity = 1,
     int RequiredSkillLevel = 1,
     int WorkbenchQueueSlots = 1,
-    int WorkbenchStorageCapacity = 1)
+    int WorkbenchStorageCapacity = 1,
+    float ConstructionEffortRequired = 1f,
+    SkillType ConstructionRequiredSkill1 = SkillType.Construction,
+    int ConstructionRequiredSkillLevel1 = 1,
+    SkillType ConstructionRequiredSkill2 = SkillType.None,
+    int ConstructionRequiredSkillLevel2 = 0,
+    SkillType ConstructionRequiredSkill3 = SkillType.None,
+    int ConstructionRequiredSkillLevel3 = 0)
 {
     public bool IsBuildingLike => Kind == ItemKind.Building || Kind == ItemKind.ResourceProductionBuilding;
 

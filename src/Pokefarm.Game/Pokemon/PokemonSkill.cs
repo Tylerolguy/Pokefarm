@@ -10,5 +10,6 @@ internal enum SkillType
     Planting = 4,
     Harvesting = 5,
     Crafting = 6,
-    Cooking = 7
+    Cooking = 7,
+    Construction = 8
 }

@@ -6,6 +6,11 @@ internal static class BuildingDialogueService
     // Generates the opening prompt shown when the player starts interacting with a building.
     public static string GetOpeningText(PlacedItem building)
     {
+        if (building.IsConstructionSite)
+        {
+            return $"THIS IS A {building.Definition.Name.ToUpperInvariant()} CONSTRUCTION SITE";
+        }
+
         return $"WHAT SHOULD I DO WITH THIS {building.Definition.Name.ToUpperInvariant()}";
     }
 
@@ -14,10 +19,50 @@ internal static class BuildingDialogueService
         PlacedItem building,
         IReadOnlyList<SpawnedPokemon> spawnedPokemon,
         Func<SpawnedPokemon, PlacedItem, bool> isWorkbenchWithinBedRange,
-        Func<PlacedItem, ItemDefinition?> getProducedMaterialForBuilding)
+        Func<PlacedItem, ItemDefinition?> getProducedMaterialForBuilding,
+        Func<PlacedItem, bool> isDittoWorkingAtBuilding)
     {
         List<PokemonDialogueOption> options = [];
-        if (building.Definition == ItemCatalog.Bed)
+        if (building.IsConstructionSite)
+        {
+            if (isDittoWorkingAtBuilding(building))
+            {
+                options.Add(new PokemonDialogueOption("STOP WORKING", PokemonDialogueAction.StopDittoWork));
+            }
+            else
+            {
+                options.Add(new PokemonDialogueOption("WORK HERE", PokemonDialogueAction.StartDittoWork));
+            }
+
+            foreach (SpawnedPokemon pokemon in spawnedPokemon.Where(pokemon =>
+                         pokemon.AssignedConstructionSiteId == building.ConstructionSiteId))
+            {
+                options.Add(new PokemonDialogueOption(
+                    $"UNASSIGN {pokemon.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.UnassignConstructionWorker,
+                    TargetPokemonId: pokemon.PokemonId));
+            }
+
+            foreach (SpawnedPokemon pokemon in spawnedPokemon)
+            {
+                if (!pokemon.IsFollowingPlayer || !CanPokemonHelpConstruction(pokemon, building))
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"ASSIGN {pokemon.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.AssignConstructionWorker,
+                    TargetPokemonId: pokemon.PokemonId));
+            }
+
+            string requirementsSummary = GetConstructionRequirementSummary(building);
+            options.Add(new PokemonDialogueOption(
+                $"NEEDS {requirementsSummary}",
+                PokemonDialogueAction.None,
+                $"REQUIRES: {requirementsSummary}"));
+        }
+        else if (building.Definition == ItemCatalog.Bed)
         {
             foreach (int residentPokemonId in BuildingWorkerHelpers.GetBedResidentPokemonIds(building))
             {
@@ -58,6 +103,15 @@ internal static class BuildingDialogueService
         }
         else if (building.Definition == ItemCatalog.WorkBench)
         {
+            if (isDittoWorkingAtBuilding(building))
+            {
+                options.Add(new PokemonDialogueOption("STOP WORKING", PokemonDialogueAction.StopDittoWork));
+            }
+            else
+            {
+                options.Add(new PokemonDialogueOption("WORK HERE", PokemonDialogueAction.StartDittoWork));
+            }
+
             if (WorkbenchCraftingHelpers.HasWorkbenchStoredItems(building))
             {
                 options.Add(new PokemonDialogueOption("PICKUP ITEMS", PokemonDialogueAction.CollectWorkbenchItem));
@@ -123,6 +177,15 @@ internal static class BuildingDialogueService
         }
         else if (building.Definition.IsResourceProduction)
         {
+            if (isDittoWorkingAtBuilding(building))
+            {
+                options.Add(new PokemonDialogueOption("STOP WORKING", PokemonDialogueAction.StopDittoWork));
+            }
+            else
+            {
+                options.Add(new PokemonDialogueOption("WORK HERE", PokemonDialogueAction.StartDittoWork));
+            }
+
             if (building.Definition == ItemCatalog.Farm)
             {
                 options.Add(new PokemonDialogueOption("GROW PLANTS", PokemonDialogueAction.OpenFarmGrowingMenu));
@@ -166,5 +229,55 @@ internal static class BuildingDialogueService
 
         options.Add(new PokemonDialogueOption("BYE", PokemonDialogueAction.Exit));
         return options;
+    }
+
+    // Checks whether this Pokemon can satisfy at least one required construction skill for the site.
+    private static bool CanPokemonHelpConstruction(SpawnedPokemon pokemon, PlacedItem building)
+    {
+        if (pokemon.AssignedConstructionSiteId == building.ConstructionSiteId)
+        {
+            return false;
+        }
+
+        foreach ((SkillType skillType, int requiredLevel) in GetConstructionSkillRequirements(building.Definition))
+        {
+            if (pokemon.GetSkillLevel(skillType) >= requiredLevel)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Computes and returns construction Requirement Summary without mutating persistent game state.
+    private static string GetConstructionRequirementSummary(PlacedItem building)
+    {
+        List<string> parts = [];
+        foreach ((SkillType skillType, int requiredLevel) in GetConstructionSkillRequirements(building.Definition))
+        {
+            parts.Add($"{skillType.ToString().ToUpperInvariant()} {requiredLevel}");
+        }
+
+        return parts.Count == 0 ? "NONE" : string.Join(", ", parts);
+    }
+
+    // Computes and returns construction Skill Requirements without mutating persistent game state.
+    private static IEnumerable<(SkillType SkillType, int RequiredLevel)> GetConstructionSkillRequirements(ItemDefinition definition)
+    {
+        if (definition.ConstructionRequiredSkill1 != SkillType.None && definition.ConstructionRequiredSkillLevel1 > 0)
+        {
+            yield return (definition.ConstructionRequiredSkill1, definition.ConstructionRequiredSkillLevel1);
+        }
+
+        if (definition.ConstructionRequiredSkill2 != SkillType.None && definition.ConstructionRequiredSkillLevel2 > 0)
+        {
+            yield return (definition.ConstructionRequiredSkill2, definition.ConstructionRequiredSkillLevel2);
+        }
+
+        if (definition.ConstructionRequiredSkill3 != SkillType.None && definition.ConstructionRequiredSkillLevel3 > 0)
+        {
+            yield return (definition.ConstructionRequiredSkill3, definition.ConstructionRequiredSkillLevel3);
+        }
     }
 }

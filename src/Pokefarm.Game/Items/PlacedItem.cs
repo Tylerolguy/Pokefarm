@@ -32,7 +32,10 @@ internal sealed record PlacedItem(
     float WorkbenchCraftEffortRemaining = 0f,
     float WorkbenchCraftEffortRequired = 0f,
     ItemDefinition? WorkbenchStoredItem = null,
-    int WorkbenchStoredQuantity = 0)
+    int WorkbenchStoredQuantity = 0,
+    bool IsConstructionSite = false,
+    int? ConstructionSiteId = null,
+    float ConstructionEffort = 0f)
 {
     // Computes and returns age Seconds without mutating persistent game state.
     public double GetAgeSeconds(double currentWorldTimeSeconds) => Math.Max(0d, currentWorldTimeSeconds - PlacedAtWorldTimeSeconds);

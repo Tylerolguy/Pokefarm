@@ -10,7 +10,7 @@ public sealed partial class FarmGame
     // Assigns a crafting-capable Pokemon to the active workbench and refreshes talk state/feedback.
     private void AssignPokemonToActiveWorkbench(int pokemonId)
     {
-        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench || _talkState.ActiveBuilding.IsConstructionSite)
         {
             return;
         }
@@ -34,6 +34,7 @@ public sealed partial class FarmGame
             return;
         }
 
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
         if (TrySetWorkbenchWorker(workbenchIndex, pokemonId, out string? message))
         {
             _talkState.UpdateBuildingReference(_placedItems[workbenchIndex]);
@@ -47,7 +48,7 @@ public sealed partial class FarmGame
     // Removes the currently selected worker from the active workbench and updates dialogue options.
     private void UnassignPokemonFromActiveWorkbench(int pokemonId)
     {
-        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench || _talkState.ActiveBuilding.IsConstructionSite)
         {
             return;
         }
@@ -68,10 +69,106 @@ public sealed partial class FarmGame
         }
     }
 
+    // Assigns a Pokemon to the active construction site so it can help satisfy requirements and build progress.
+    private void AssignPokemonToActiveConstructionSite(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.IsConstructionSite || !_talkState.ActiveBuilding.ConstructionSiteId.HasValue)
+        {
+            return;
+        }
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (buildingIndex < 0)
+        {
+            return;
+        }
+
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        bool canHelpConstruction = GetConstructionSkillRequirements(_placedItems[buildingIndex].Definition)
+            .Any(requirement => pokemon.GetSkillLevel(requirement.SkillType) >= requirement.RequiredLevel);
+        if (!canHelpConstruction)
+        {
+            _talkState.SetText("THIS POKEMON CANT HELP BUILD HERE");
+            return;
+        }
+
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            AssignedConstructionSiteId = _placedItems[buildingIndex].ConstructionSiteId,
+            IsAssignedToWork = true,
+            IsWorking = false,
+            IsFollowingPlayer = false,
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveCooldownRemaining = 0f,
+            MoveTarget = pokemon.Position,
+            ShowWorkBlockedMarker = false
+        };
+
+        _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[buildingIndex]));
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} WILL HELP BUILD");
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} ASSIGNED TO CONSTRUCTION";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Unassigns a Pokemon from the active construction site and restores its normal claimed-idle movement state.
+    private void UnassignPokemonFromActiveConstructionSite(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.IsConstructionSite || !_talkState.ActiveBuilding.ConstructionSiteId.HasValue)
+        {
+            return;
+        }
+
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        if (pokemon.AssignedConstructionSiteId != _talkState.ActiveBuilding.ConstructionSiteId)
+        {
+            _talkState.SetText("POKEMON NOT ASSIGNED HERE");
+            return;
+        }
+
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            AssignedConstructionSiteId = null,
+            IsAssignedToWork = false,
+            IsWorking = false,
+            IsFollowingPlayer = false,
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+            MoveTarget = pokemon.Position,
+            ShowWorkBlockedMarker = false
+        };
+
+        int buildingIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (buildingIndex >= 0)
+        {
+            _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
+            _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[buildingIndex]));
+        }
+
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} UNASSIGNED");
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} UNASSIGNED";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
     // Cancels the current workbench queue entry and refunds recipe costs back into inventory.
     private void DequeueActiveWorkbenchItem()
     {
-        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench || _talkState.ActiveBuilding.IsConstructionSite)
         {
             return;
         }
@@ -137,7 +234,7 @@ public sealed partial class FarmGame
     // Collects a completed workbench item through the talk flow and refreshes the active panel.
     private void CollectReadyWorkbenchItemFromTalk()
     {
-        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench || _talkState.ActiveBuilding.IsConstructionSite)
         {
             return;
         }
@@ -234,6 +331,8 @@ public sealed partial class FarmGame
         _spawnedDittos[pokemonIndex] = pokemon with
         {
             IsClaimed = true,
+            AssignedConstructionSiteId = null,
+            IsAssignedToWork = false,
             IsWorking = false,
             IsFollowingPlayer = false,
             IsMoving = false,
@@ -472,6 +571,7 @@ public sealed partial class FarmGame
             SpawnedPokemon worker = _spawnedDittos[workerIndex];
             _spawnedDittos[workerIndex] = worker with
             {
+                AssignedConstructionSiteId = null,
                 IsAssignedToWork = false,
                 IsWorking = false
             };
@@ -481,7 +581,7 @@ public sealed partial class FarmGame
     // Computes and returns resource Assignment Failure Reason without mutating persistent game state.
     private ResourceAssignmentFailureReason GetResourceAssignmentFailureReason(SpawnedPokemon pokemon, PlacedItem building)
     {
-        if (!building.Definition.IsResourceProduction)
+        if (!building.Definition.IsResourceProduction || building.IsConstructionSite)
         {
             return ResourceAssignmentFailureReason.InvalidBuilding;
         }
@@ -605,7 +705,7 @@ public sealed partial class FarmGame
     // Resolves what item a building should output, including farm-specific crop overrides.
     private static ItemDefinition? GetProducedMaterialForBuilding(PlacedItem building)
     {
-        if (!building.Definition.IsResourceProduction)
+        if (!building.Definition.IsResourceProduction || building.IsConstructionSite)
         {
             return null;
         }

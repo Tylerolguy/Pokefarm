@@ -15,7 +15,7 @@ internal static class SpawnedPokemonCatalog
         ["Sewaddle"] = new SpawnedPokemonDefinition(
             "Sewaddle",
             CreateSkillLevels((SkillType.Lumber, 1), (SkillType.Farming, 1), (SkillType.Water, 1), 
-            (SkillType.Planting, 1), (SkillType.Harvesting, 1))),
+            (SkillType.Planting, 1), (SkillType.Harvesting, 1), (SkillType.Construction, 1))),
         ["Azurill"] = new SpawnedPokemonDefinition(
             "Azurill",
             CreateSkillLevels((SkillType.Farming, 1))),
@@ -29,11 +29,11 @@ internal static class SpawnedPokemonCatalog
         ["Caterpie"] = new SpawnedPokemonDefinition("Caterpie", NoSkills),
         ["Poliwag"] = new SpawnedPokemonDefinition("Poliwag", NoSkills),
         ["Hoppip"] = new SpawnedPokemonDefinition("Hoppip", NoSkills),
-        ["Tyrogue"] = new SpawnedPokemonDefinition("Tyrogue", CreateSkillLevels((SkillType.Crafting, 1))),
+        ["Tyrogue"] = new SpawnedPokemonDefinition("Tyrogue", CreateSkillLevels((SkillType.Crafting, 1), (SkillType.Construction, 1))),
         ["Smoochum"] = new SpawnedPokemonDefinition("Smoochum", NoSkills),
         ["Magby"] = new SpawnedPokemonDefinition("Magby", NoSkills),
         ["Nincada"] = new SpawnedPokemonDefinition("Nincada", NoSkills),
-        ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1))),
+        ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1), (SkillType.Construction, 1))),
         ["Noibat"] = new SpawnedPokemonDefinition("Noibat", CreateSkillLevels((SkillType.Harvesting, 1))),
         ["Dratini"] = new SpawnedPokemonDefinition("Dratini", CreateSkillLevels((SkillType.Water, 1)))
     };

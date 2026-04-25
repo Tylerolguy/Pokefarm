@@ -195,8 +195,17 @@ public sealed partial class FarmGame
             Texture2D texture = (item.Definition.IsBuildingLike || item.Definition.Kind == ItemKind.Snack) && item.Definition.HasCollision
                 ? _pixel
                 : _circleTexture;
-            _spriteBatch.Draw(texture, item.Bounds, item.Definition.Tint);
+            Color drawTint = item.IsConstructionSite
+                ? new Color(152, 118, 82)
+                : item.Definition.Tint;
+            _spriteBatch.Draw(texture, item.Bounds, drawTint);
             DrawPanelBorder(item.Bounds, new Color(40, 28, 20));
+
+            if (item.IsConstructionSite)
+            {
+                DrawConstructionSiteMarker(item);
+                DrawConstructionProgressCircle(item);
+            }
 
             Rectangle exitBounds = GetResourceBuildingExitBounds(item);
             if (!exitBounds.IsEmpty)
@@ -213,12 +222,47 @@ public sealed partial class FarmGame
                 DrawWorkbenchCraftingProgressCircle(item);
             }
 
+            bool hasAssignedConstructionWorkers = item.IsConstructionSite &&
+                                                  item.ConstructionSiteId.HasValue &&
+                                                  _spawnedDittos.Any(pokemon => pokemon.AssignedConstructionSiteId == item.ConstructionSiteId);
             if ((item.Definition.IsResourceProduction || item.Definition == ItemCatalog.WorkBench) &&
-                GetWorkerPokemonNames(item).Count > 0)
+                GetWorkerPokemonNames(item).Count > 0 ||
+                hasAssignedConstructionWorkers)
             {
                 DrawBuildingWorkerIcons(item);
             }
         }
+    }
+
+    // Draws construction-site marker text and overlay so unfinished buildings are visually distinct.
+    private void DrawConstructionSiteMarker(PlacedItem constructionSite)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Rectangle bannerBounds = new(
+            constructionSite.Bounds.X + 2,
+            constructionSite.Bounds.Y + 2,
+            Math.Max(20, constructionSite.Bounds.Width - 4),
+            14);
+        _spriteBatch.Draw(_pixel, bannerBounds, new Color(44, 31, 23, 220));
+        DrawPanelBorder(bannerBounds, new Color(215, 178, 124, 220));
+        DrawPixelText("SITE", new Vector2(bannerBounds.X + 4, bannerBounds.Y + 3), new Color(236, 220, 196));
+    }
+
+    // Draws construction Progress Circle for the current frame using the active render context.
+    private void DrawConstructionProgressCircle(PlacedItem constructionSite)
+    {
+        if (_spriteBatch is null || _pixel is null || _circleTexture is null || !constructionSite.IsConstructionSite)
+        {
+            return;
+        }
+
+        float requiredEffort = Math.Max(0.1f, constructionSite.Definition.ConstructionEffortRequired);
+        float progress = MathHelper.Clamp(constructionSite.ConstructionEffort / requiredEffort, 0f, 1f);
+        DrawProgressCircleAtBuildingCenter(constructionSite, progress, new Color(255, 226, 74, 235));
     }
 
     // Draws bed Home Range for the current frame using the active render context.
@@ -366,7 +410,12 @@ public sealed partial class FarmGame
             return;
         }
 
-        List<string> workerNames = GetWorkerPokemonNames(building);
+        List<string> workerNames = building.IsConstructionSite && building.ConstructionSiteId.HasValue
+            ? _spawnedDittos
+                .Where(pokemon => pokemon.AssignedConstructionSiteId == building.ConstructionSiteId)
+                .Select(pokemon => pokemon.Name)
+                .ToList()
+            : GetWorkerPokemonNames(building);
         const int iconSize = 16;
         const int spacing = 3;
         int totalWidth = (workerNames.Count * iconSize) + ((workerNames.Count - 1) * spacing);
@@ -784,7 +833,10 @@ public sealed partial class FarmGame
             return;
         }
 
-        List<string> entries = GetPcMenuEntries();
+        List<PcStorageEntry> storageEntries = GetPcStorageEntries();
+        List<string> entries = _activePcMenuScreen == PcMenuScreen.Storage
+            ? storageEntries.ConvertAll(entry => entry.PokemonName)
+            : GetPcMenuEntries();
         if (entries.Count == 0)
         {
             DrawPixelText(
@@ -816,13 +868,29 @@ public sealed partial class FarmGame
 
             _spriteBatch.Draw(_pixel, rowBounds, selected ? new Color(38, 30, 28) : rowFill);
             DrawPanelBorder(rowBounds, selected ? Color.Gold : rowBorder);
-            DrawPixelText(entries[entryIndex].ToUpperInvariant(), new Vector2(rowBounds.X + 14, rowBounds.Y + 16), new Color(236, 220, 196));
+            if (_activePcMenuScreen == PcMenuScreen.Storage)
+            {
+                DrawPcStorageEntryRow(storageEntries[entryIndex], rowBounds);
+            }
+            else
+            {
+                DrawPixelText(entries[entryIndex].ToUpperInvariant(), new Vector2(rowBounds.X + 14, rowBounds.Y + 16), new Color(236, 220, 196));
+            }
         }
 
         string footerText = _activePcMenuScreen == PcMenuScreen.Storage
-            ? "SPACE RELEASE  E CLOSE"
+            ? (_isPcStorageActionMenuOpen ? "SPACE SELECT  E BACK" : "SPACE ACTIONS  E CLOSE")
             : "E CLOSE";
         DrawPixelText(footerText, new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
+
+        if (_activePcMenuScreen == PcMenuScreen.Storage)
+        {
+            DrawPixelText("BOX + FARM", new Vector2(panel.Right - 170, panel.Y + 18), new Color(210, 220, 240));
+            if (_isPcStorageActionMenuOpen)
+            {
+                DrawPcStorageActionMenu(panel);
+            }
+        }
     }
 
     // Computes and returns pc Menu Theme without mutating persistent game state.
@@ -886,6 +954,61 @@ public sealed partial class FarmGame
         }
 
         return [];
+    }
+
+    // Draws one row in the PC storage list, including icon and section label for boxed vs on-farm Pokemon.
+    private void DrawPcStorageEntryRow(PcStorageEntry entry, Rectangle rowBounds)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Rectangle iconBounds = new(rowBounds.X + 8, rowBounds.Y + 7, 36, 36);
+        _spriteBatch.Draw(_pixel, iconBounds, new Color(24, 42, 78));
+        DrawPanelBorder(iconBounds, new Color(120, 168, 236));
+        if (TryGetPokemonIconTexture(entry.PokemonName, out Texture2D? iconTexture) && iconTexture is not null)
+        {
+            Rectangle inner = new(iconBounds.X + 3, iconBounds.Y + 3, iconBounds.Width - 6, iconBounds.Height - 6);
+            _spriteBatch.Draw(iconTexture, inner, Color.White);
+        }
+        else
+        {
+            DrawPixelText("?", new Vector2(iconBounds.X + 13, iconBounds.Y + 12), new Color(236, 220, 196));
+        }
+
+        string sectionLabel = entry.IsStoredInPc ? "BOX" : "FARM";
+        DrawPixelText(sectionLabel, new Vector2(rowBounds.Right - 72, rowBounds.Y + 8), new Color(170, 206, 255));
+        DrawPixelText(entry.PokemonName.ToUpperInvariant(), new Vector2(rowBounds.X + 54, rowBounds.Y + 16), new Color(236, 220, 196));
+    }
+
+    // Draws the per-entry action menu for the highlighted PC storage Pokemon.
+    private void DrawPcStorageActionMenu(Rectangle parentPanel)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        List<string> actions = GetSelectedPcStorageEntryActions();
+        if (actions.Count == 0)
+        {
+            return;
+        }
+
+        Rectangle menuBounds = new(parentPanel.Right - 210, parentPanel.Bottom - 170, 180, 130);
+        _spriteBatch.Draw(_pixel, menuBounds, new Color(18, 36, 72, 240));
+        DrawPanelBorder(menuBounds, new Color(120, 168, 236));
+        DrawPixelText("ACTION", new Vector2(menuBounds.X + 12, menuBounds.Y + 10), new Color(210, 220, 240));
+
+        for (int index = 0; index < actions.Count; index++)
+        {
+            Rectangle actionBounds = new(menuBounds.X + 10, menuBounds.Y + 34 + (index * 28), menuBounds.Width - 20, 22);
+            bool selected = index == _selectedPcStorageActionIndex;
+            _spriteBatch.Draw(_pixel, actionBounds, selected ? new Color(42, 84, 156) : new Color(24, 52, 98));
+            DrawPanelBorder(actionBounds, selected ? Color.Gold : new Color(120, 168, 236));
+            DrawPixelText(actions[index], new Vector2(actionBounds.X + 8, actionBounds.Y + 6), new Color(236, 220, 196));
+        }
     }
 
     // Draws dungeon Menu Screen for the current frame using the active render context.
@@ -1141,7 +1264,9 @@ public sealed partial class FarmGame
         }
         if (_interactTarget is not null)
         {
-            string buildingName = _interactTarget.Definition.Name.ToUpperInvariant();
+            string buildingName = _interactTarget.IsConstructionSite
+                ? $"{_interactTarget.Definition.Name.ToUpperInvariant()} SITE"
+                : _interactTarget.Definition.Name.ToUpperInvariant();
             DrawPromptPanel($"PRESS E TO USE {buildingName}", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
         }
 

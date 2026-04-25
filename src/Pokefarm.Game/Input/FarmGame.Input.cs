@@ -28,14 +28,30 @@ public sealed partial class FarmGame
     }
 
     // Attempts to place Selected Item and reports success so callers can handle failure without exceptions.
-    private void TryPlaceSelectedItem()
+    private void TryPlaceSelectedItem(bool skipConstructionSite = false)
     {
         if (_inputMode != InputMode.Placement || !_previewPlacementValid || _previewItem is null || _inventoryItems.Count == 0)
         {
             return;
         }
 
-        _placedItems.Add(_previewItem);
+        PlacedItem placedItem = _previewItem;
+        if (placedItem.Definition.IsBuildingLike && !skipConstructionSite)
+        {
+            placedItem = CreateConstructionSite(placedItem);
+        }
+        else if (placedItem.Definition.IsBuildingLike && skipConstructionSite)
+        {
+            // DEV MODE: pressing Enter while placing skips construction and places the finished building directly.
+            placedItem = placedItem with
+            {
+                IsConstructionSite = false,
+                ConstructionSiteId = null,
+                ConstructionEffort = 0f
+            };
+        }
+
+        _placedItems.Add(placedItem);
         RemoveInventoryUnitAt(_selectedInventoryIndex);
         ExitPlacementMode(InputMode.Gameplay);
 
@@ -49,6 +65,17 @@ public sealed partial class FarmGame
         }
 
         EnsureInventorySelectionVisible();
+    }
+
+    // Converts a placed building preview into a construction site shell that workers can complete over time.
+    private PlacedItem CreateConstructionSite(PlacedItem placedBuilding)
+    {
+        return placedBuilding with
+        {
+            IsConstructionSite = true,
+            ConstructionSiteId = _nextConstructionSiteId++,
+            ConstructionEffort = 0f
+        };
     }
 
     // Switches inventory Mode between modes and applies associated state resets.
@@ -506,6 +533,31 @@ public sealed partial class FarmGame
             }
         }
 
+        if (_removeTarget.IsConstructionSite && _removeTarget.ConstructionSiteId.HasValue)
+        {
+            int constructionSiteId = _removeTarget.ConstructionSiteId.Value;
+            for (int pokemonIndex = 0; pokemonIndex < _spawnedDittos.Count; pokemonIndex++)
+            {
+                SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+                if (pokemon.AssignedConstructionSiteId != constructionSiteId)
+                {
+                    continue;
+                }
+
+                _spawnedDittos[pokemonIndex] = pokemon with
+                {
+                    AssignedConstructionSiteId = null,
+                    IsAssignedToWork = false,
+                    IsWorking = false,
+                    IsFollowingPlayer = false,
+                    IsMoving = false,
+                    MoveTimeRemaining = 0f,
+                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                    MoveTarget = pokemon.Position
+                };
+            }
+        }
+
         if (_removeTarget.Definition.IsResourceProduction &&
             producedMaterial is not null &&
             _removeTarget.StoredProducedUnits > 0)
@@ -558,11 +610,15 @@ public sealed partial class FarmGame
         _activeCraftingSource = craftingSource;
         _activeWorkbenchIndex = -1;
         _activeFarmIndex = -1;
-        if (craftingSource == CraftingSource.BasicWorkBenchCrafting && _interactTarget?.Definition == ItemCatalog.WorkBench)
+        if (craftingSource == CraftingSource.BasicWorkBenchCrafting &&
+            _interactTarget?.Definition == ItemCatalog.WorkBench &&
+            _interactTarget?.IsConstructionSite == false)
         {
             _activeWorkbenchIndex = _placedItems.FindIndex(item => item == _interactTarget);
         }
-        else if (craftingSource == CraftingSource.FarmGrowing && _interactTarget?.Definition == ItemCatalog.Farm)
+        else if (craftingSource == CraftingSource.FarmGrowing &&
+                 _interactTarget?.Definition == ItemCatalog.Farm &&
+                 _interactTarget?.IsConstructionSite == false)
         {
             _activeFarmIndex = _placedItems.FindIndex(item => item == _interactTarget);
         }
@@ -788,6 +844,30 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.AssignConstructionWorker && selectedOption.TargetPokemonId.HasValue)
+        {
+            AssignPokemonToActiveConstructionSite(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.UnassignConstructionWorker && selectedOption.TargetPokemonId.HasValue)
+        {
+            UnassignPokemonFromActiveConstructionSite(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.StartDittoWork)
+        {
+            StartDittoWorkingAtActiveBuilding();
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.StopDittoWork)
+        {
+            StopDittoWorking();
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.OpenWorkbenchQueue)
         {
             if (_talkState.ActiveBuilding is not null)
@@ -905,6 +985,13 @@ public sealed partial class FarmGame
     {
         _inputMode = InputMode.Gameplay;
         _talkExitTimer = 0f;
+        _isDittoWorking = false;
+        _dittoWorkBuildingIndex = -1;
+        _dittoWorkType = DittoWorkType.None;
+        _dittoWorkBuildingBounds = Rectangle.Empty;
+        _dittoWorkBuildingDefinition = null;
+        _dittoWorkDialogueDotTimer = 0f;
+        _dittoWorkDialogueDotCount = 0;
         _talkState.Reset();
         ResetAssignmentFailureDialogueState();
     }
@@ -1007,6 +1094,8 @@ public sealed partial class FarmGame
 
         _activePcMenuScreen = screen;
         _selectedPcMenuIndex = 0;
+        _isPcStorageActionMenuOpen = false;
+        _selectedPcStorageActionIndex = 0;
         _inputMode = InputMode.PcMenu;
         _talkExitTimer = 0f;
     }
@@ -1016,12 +1105,36 @@ public sealed partial class FarmGame
     {
         _inputMode = InputMode.Gameplay;
         _selectedPcMenuIndex = 0;
+        _isPcStorageActionMenuOpen = false;
+        _selectedPcStorageActionIndex = 0;
         _activePcIndex = -1;
     }
 
     // Ticks pc Menu Navigation each frame and keeps related timers and state synchronized.
-    private void UpdatePcMenuNavigation(bool moveUp, bool moveDown)
+    private void UpdatePcMenuNavigation(bool moveUp, bool moveDown, bool moveLeft, bool moveRight)
     {
+        if (_activePcMenuScreen == PcMenuScreen.Storage && _isPcStorageActionMenuOpen)
+        {
+            List<string> actionOptions = GetSelectedPcStorageEntryActions();
+            if (actionOptions.Count <= 0)
+            {
+                _selectedPcStorageActionIndex = 0;
+                return;
+            }
+
+            if (moveUp || moveLeft)
+            {
+                _selectedPcStorageActionIndex = Math.Max(0, _selectedPcStorageActionIndex - 1);
+            }
+
+            if (moveDown || moveRight)
+            {
+                _selectedPcStorageActionIndex = Math.Min(actionOptions.Count - 1, _selectedPcStorageActionIndex + 1);
+            }
+
+            return;
+        }
+
         int count = GetPcMenuEntryCount();
         if (count <= 0)
         {
@@ -1048,9 +1161,10 @@ public sealed partial class FarmGame
             return;
         }
 
-        if (_storedPcPokemonNames.Count == 0 ||
+        List<PcStorageEntry> entries = GetPcStorageEntries();
+        if (entries.Count == 0 ||
             _selectedPcMenuIndex < 0 ||
-            _selectedPcMenuIndex >= _storedPcPokemonNames.Count)
+            _selectedPcMenuIndex >= entries.Count)
         {
             return;
         }
@@ -1062,26 +1176,42 @@ public sealed partial class FarmGame
             return;
         }
 
-        string pokemonName = _storedPcPokemonNames[_selectedPcMenuIndex];
-        if (!TryFindNearbyOpenPokemonSpawnPosition(_placedItems[_activePcIndex].Bounds, out Vector2 spawnPosition))
+        if (!_isPcStorageActionMenuOpen)
         {
-            _interactionMessage = "NO VALID SPOT AVAILABLE";
-            _interactionMessageTimer = InteractionMessageDuration;
+            _isPcStorageActionMenuOpen = true;
+            _selectedPcStorageActionIndex = 0;
             return;
         }
 
-        SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(pokemonName);
-        _spawnedDittos.Add(new SpawnedPokemon(
-            _nextPokemonId++,
-            spawnDefinition.Name,
-            spawnPosition,
-            Direction.Down,
-            GetRandomMoveDelaySeconds(),
-            spawnDefinition.SkillLevels));
-        _storedPcPokemonNames.RemoveAt(_selectedPcMenuIndex);
-        _selectedPcMenuIndex = Math.Clamp(_selectedPcMenuIndex, 0, Math.Max(0, _storedPcPokemonNames.Count - 1));
-        _interactionMessage = $"{spawnDefinition.Name.ToUpperInvariant()} RELEASED";
-        _interactionMessageTimer = InteractionMessageDuration;
+        PcStorageEntry entry = entries[_selectedPcMenuIndex];
+        List<string> actions = GetPcStorageActions(entry);
+        if (actions.Count == 0)
+        {
+            _isPcStorageActionMenuOpen = false;
+            return;
+        }
+
+        _selectedPcStorageActionIndex = Math.Clamp(_selectedPcStorageActionIndex, 0, actions.Count - 1);
+        string action = actions[_selectedPcStorageActionIndex];
+        if (entry.IsStoredInPc && (action == "RELEASE" || action == "PLACE ON FARM"))
+        {
+            if (!TryReleaseStoredPokemon(entry.StoredIndex, action))
+            {
+                return;
+            }
+        }
+        else if (!entry.IsStoredInPc && action == "STORE")
+        {
+            if (entry.PokemonId is not int pokemonId || !TryStorePokemonFromFarmById(pokemonId))
+            {
+                return;
+            }
+        }
+
+        _isPcStorageActionMenuOpen = false;
+        _selectedPcStorageActionIndex = 0;
+        int refreshedCount = GetPcStorageEntries().Count;
+        _selectedPcMenuIndex = Math.Clamp(_selectedPcMenuIndex, 0, Math.Max(0, refreshedCount - 1));
     }
 
     // Computes and returns pc Menu Entry Count without mutating persistent game state.
@@ -1090,7 +1220,7 @@ public sealed partial class FarmGame
         return _activePcMenuScreen switch
         {
             PcMenuScreen.Quests => _activeQuests.Count,
-            PcMenuScreen.Storage => _storedPcPokemonNames.Count,
+            PcMenuScreen.Storage => GetPcStorageEntries().Count,
             _ => 0
         };
     }
@@ -1117,6 +1247,8 @@ public sealed partial class FarmGame
             return;
         }
 
+        ClearExistingBedForPokemon(pokemon.PokemonId);
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
         _storedPcPokemonNames.Add(pokemon.Name);
         _spawnedDittos.RemoveAt(pokemonIndex);
 
@@ -1132,6 +1264,111 @@ public sealed partial class FarmGame
         }
         _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} STORED IN PC";
         _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Closes the PC storage entry action submenu and returns to the main storage list selection.
+    private void ClosePcStorageActionMenu()
+    {
+        _isPcStorageActionMenuOpen = false;
+        _selectedPcStorageActionIndex = 0;
+    }
+
+    // Computes and returns pc Storage Entries without mutating persistent game state.
+    private List<PcStorageEntry> GetPcStorageEntries()
+    {
+        List<PcStorageEntry> entries = [];
+        for (int index = 0; index < _storedPcPokemonNames.Count; index++)
+        {
+            entries.Add(new PcStorageEntry(_storedPcPokemonNames[index], true, index));
+        }
+
+        foreach (SpawnedPokemon pokemon in _spawnedDittos)
+        {
+            entries.Add(new PcStorageEntry(pokemon.Name, false, -1, pokemon.PokemonId));
+        }
+
+        return entries;
+    }
+
+    // Computes and returns the available action labels for the currently highlighted PC storage entry.
+    private List<string> GetSelectedPcStorageEntryActions()
+    {
+        List<PcStorageEntry> entries = GetPcStorageEntries();
+        if (_selectedPcMenuIndex < 0 || _selectedPcMenuIndex >= entries.Count)
+        {
+            return [];
+        }
+
+        return GetPcStorageActions(entries[_selectedPcMenuIndex]);
+    }
+
+    // Computes and returns action options for a PC storage entry based on whether that Pokemon is boxed or on farm.
+    private static List<string> GetPcStorageActions(PcStorageEntry entry)
+    {
+        if (entry.IsStoredInPc)
+        {
+            return ["RELEASE", "PLACE ON FARM"];
+        }
+
+        return ["STORE"];
+    }
+
+    // Attempts to release a boxed Pokemon near the PC and reports success so callers can handle failure without exceptions.
+    private bool TryReleaseStoredPokemon(int storedIndex, string actionLabel)
+    {
+        if (storedIndex < 0 || storedIndex >= _storedPcPokemonNames.Count)
+        {
+            return false;
+        }
+
+        if (_activePcIndex < 0 || _activePcIndex >= _placedItems.Count || _placedItems[_activePcIndex].Definition != ItemCatalog.Pc)
+        {
+            _interactionMessage = "PC NOT AVAILABLE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return false;
+        }
+
+        string pokemonName = _storedPcPokemonNames[storedIndex];
+        if (!TryFindNearbyOpenPokemonSpawnPosition(_placedItems[_activePcIndex].Bounds, out Vector2 spawnPosition))
+        {
+            _interactionMessage = "NO VALID SPOT AVAILABLE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return false;
+        }
+
+        SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(pokemonName);
+        _spawnedDittos.Add(new SpawnedPokemon(
+            _nextPokemonId++,
+            spawnDefinition.Name,
+            spawnPosition,
+            Direction.Down,
+            GetRandomMoveDelaySeconds(),
+            spawnDefinition.SkillLevels));
+        _storedPcPokemonNames.RemoveAt(storedIndex);
+        _interactionMessage = actionLabel == "PLACE ON FARM"
+            ? $"{spawnDefinition.Name.ToUpperInvariant()} PLACED ON FARM"
+            : $"{spawnDefinition.Name.ToUpperInvariant()} RELEASED";
+        _interactionMessageTimer = InteractionMessageDuration;
+        return true;
+    }
+
+    // Attempts to store an on-farm Pokemon in the PC and reports success so callers can handle failure without exceptions.
+    private bool TryStorePokemonFromFarmById(int pokemonId)
+    {
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            return false;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        ClearExistingBedForPokemon(pokemon.PokemonId);
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
+        _storedPcPokemonNames.Add(pokemon.Name);
+        _spawnedDittos.RemoveAt(pokemonIndex);
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} STORED IN PC";
+        _interactionMessageTimer = InteractionMessageDuration;
+        return true;
     }
 
     // Attempts to find Nearby Open Pokemon Spawn Position and reports success so callers can handle failure without exceptions.

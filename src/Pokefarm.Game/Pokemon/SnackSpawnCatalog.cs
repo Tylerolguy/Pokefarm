@@ -35,7 +35,7 @@ internal static class SnackSpawnCatalog
 
         [ItemCatalog.BasicSnack3] =
         [
-            new WeightedPokemonSpawn("Dratini", 1f)
+            new WeightedPokemonSpawn("Tyrogue", 1f)
         ],
 
         [ItemCatalog.BasicSnack4] =
