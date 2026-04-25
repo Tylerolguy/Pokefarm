@@ -12,6 +12,8 @@ internal static class ItemCatalog
     public static readonly ItemDefinition WorkBench = new("Work Bench", new Color(124, 86, 54), ItemKind.Building, true, new Point(64, 48), true, "WORK BENCH", ExitSize: new Point(32, 32));
     public static readonly ItemDefinition BasicSnack = new("Basic Snack", new Color(214, 186, 112), ItemKind.Snack, true, new Point(15, 15));
     public static readonly ItemDefinition BasicSnack2 = new("Basic Snack 2", new Color(0, 186, 112), ItemKind.Snack, true, new Point(15, 15));
+    public static readonly ItemDefinition BasicSnack3 = new("Basic Snack 3", new Color(103, 160, 226), ItemKind.Snack, true, new Point(15, 15));
+    public static readonly ItemDefinition BasicSnack4 = new("Basic Snack 4", new Color(136, 103, 186), ItemKind.Snack, true, new Point(15, 15));
     public static readonly ItemDefinition Bed = new("Bed", new Color(181, 112, 96), ItemKind.Building, true, new Point(40, 24), BedCapacity: 2);
     public static readonly ItemDefinition Pc = new("PC", new Color(168, 176, 232), ItemKind.Building, true, new Point(56, 56), true, "PC");
     public static readonly ItemDefinition DungeonPortal = new("Dungeon Portal", new Color(136, 136, 144), ItemKind.Building, true, new Point(64, 64), true, "DUNGEON PORTAL", ExitSize: new Point(32, 32));

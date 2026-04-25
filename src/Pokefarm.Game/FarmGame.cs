@@ -43,6 +43,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private const float SpawnedPokemonMinMoveDelay = 2f;
     private const float SpawnedPokemonMaxMoveDelay = 4f;
     private const float SpawnedPokemonMoveDuration = 0.3f;
+    private const float WanderRetryDelaySeconds = 0.35f;
     private const float UnclaimedPokemonIdleFrameTime = 0.22f;
     private const float UnclaimedPokemonIdleCyclePauseSeconds = 0.8f;
     private const int UnclaimedPokemonIdleFrameCount = 5;
@@ -62,9 +63,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         new(ItemCatalog.WorkBench, 1),
         new(ItemCatalog.Tree, 2),
         new(ItemCatalog.Farm, 1),
-        new(ItemCatalog.DungeonPortal, 1),
         new(ItemCatalog.BasicSnack, 12),
-        new(ItemCatalog.BasicSnack2, 11)
+        new(ItemCatalog.BasicSnack2, 11),
+        new(ItemCatalog.BasicSnack3, 2),
+        new(ItemCatalog.BasicSnack4, 1)
     ];
     private readonly List<RecipeDefinition> _unlockedRecipes =
     [
@@ -134,6 +136,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private float _dialogueTransition;
     private float _talkExitTimer;
     private string? _interactionMessage;
+    private bool _isHitboxDisplayMode;
     private bool _isAssignmentFailureDialogueActive;
     private PlacedItem? _assignmentFailureReturnBuilding;
     private int _nextPokemonId = 1;
@@ -324,10 +327,16 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         bool removeModePressed = keyboard.IsKeyDown(Keys.U) && !_previousKeyboard.IsKeyDown(Keys.U);
         bool interactPressed = keyboard.IsKeyDown(Keys.E) && !_previousKeyboard.IsKeyDown(Keys.E);
         bool talkPressed = keyboard.IsKeyDown(Keys.Q) && !_previousKeyboard.IsKeyDown(Keys.Q);
+        bool hitboxModePressed = keyboard.IsKeyDown(Keys.H) && !_previousKeyboard.IsKeyDown(Keys.H);
         bool moveLeftPressed = keyboard.IsKeyDown(Keys.A) && !_previousKeyboard.IsKeyDown(Keys.A);
         bool moveRightPressed = keyboard.IsKeyDown(Keys.D) && !_previousKeyboard.IsKeyDown(Keys.D);
         bool moveUpPressed = keyboard.IsKeyDown(Keys.W) && !_previousKeyboard.IsKeyDown(Keys.W);
         bool moveDownPressed = keyboard.IsKeyDown(Keys.S) && !_previousKeyboard.IsKeyDown(Keys.S);
+
+        if (hitboxModePressed)
+        {
+            _isHitboxDisplayMode = !_isHitboxDisplayMode;
+        }
 
         if (keyboard.IsKeyDown(Keys.Escape))
         {
@@ -896,7 +905,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             if (pokemon.HomePosition is Vector2 homePosition &&
                 Vector2.DistanceSquared(pokemon.Position, homePosition) > HomeWanderRadius * HomeWanderRadius)
             {
-                Rectangle homeTargetArea = GetHomeRangeTargetArea(homePosition);
+                Rectangle homeTargetArea = GetInsideHomeRangeTargetArea(pokemon.Position, homePosition);
                 if (TryFindPathDirectionToTargetArea(
                     pokemon.Position,
                     homeTargetArea,
@@ -947,13 +956,24 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             if (!wanderTarget.HasValue)
             {
+                if (!ShouldPokemonAttemptWanderMove(pokemon))
+                {
+                    _spawnedDittos[index] = pokemon with
+                    {
+                        WanderTarget = null,
+                        MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                        ShowWorkBlockedMarker = workPathBlocked
+                    };
+                    continue;
+                }
+
                 wanderTarget = TryPickRandomWanderTargetInHomeRange(pokemon, index);
                 if (!wanderTarget.HasValue)
                 {
                     _spawnedDittos[index] = pokemon with
                     {
                         WanderTarget = null,
-                        MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                        MoveCooldownRemaining = WanderRetryDelaySeconds,
                         ShowWorkBlockedMarker = workPathBlocked
                     };
                     continue;
@@ -981,7 +1001,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 _spawnedDittos[index] = pokemon with
                 {
                     WanderTarget = null,
-                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                    MoveCooldownRemaining = WanderRetryDelaySeconds,
                     ShowWorkBlockedMarker = workPathBlocked
                 };
             }
@@ -1091,6 +1111,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private static float GetRandomMoveDelaySeconds()
     {
         return Random.Shared.NextSingle() * (SpawnedPokemonMaxMoveDelay - SpawnedPokemonMinMoveDelay) + SpawnedPokemonMinMoveDelay;
+    }
+
+    // Computes and returns whether this Pokemon should attempt a wander step this cycle.
+    private static bool ShouldPokemonAttemptWanderMove(SpawnedPokemon pokemon)
+    {
+        if (!pokemon.IsClaimed || pokemon.HomePosition is not Vector2)
+        {
+            return true;
+        }
+
+        return Random.Shared.NextSingle() < 0.75f;
     }
 
     // Ticks resource Production each frame and keeps related timers and state synchronized.
@@ -1313,11 +1344,12 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             _worldBounds.Height - (BorderThickness * 2));
 
         Vector2 origin = pokemon.HomePosition ?? pokemon.Position;
-        const int maxAttempts = 10;
+        const float wanderRadius = HomeWanderRadius;
+        const int maxAttempts = 24;
         for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
             float angle = Random.Shared.NextSingle() * MathHelper.TwoPi;
-            float distance = Random.Shared.NextSingle() * HomeWanderRadius;
+            float distance = Random.Shared.NextSingle() * wanderRadius;
             Vector2 offset = new(MathF.Cos(angle) * distance, MathF.Sin(angle) * distance);
             Vector2 candidate = origin + offset;
             candidate = new Vector2(
@@ -1331,12 +1363,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             if (pokemon.HomePosition is Vector2 homePosition &&
-                Vector2.DistanceSquared(candidate, homePosition) > HomeWanderRadius * HomeWanderRadius)
+                Vector2.DistanceSquared(candidate, homePosition) > wanderRadius * wanderRadius)
             {
                 continue;
             }
 
             if (CollidesWithPlacedItem(candidate) || CollidesWithSpawnedPokemon(candidateBounds, pokemonIndex))
+            {
+                continue;
+            }
+
+            if (!CanReachTargetAreaFromPosition(pokemon.Position, candidateBounds, pokemonIndex))
             {
                 continue;
             }
@@ -1705,6 +1742,31 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private static Rectangle GetHomeRangeTargetArea(Vector2 homePosition)
     {
         int radius = (int)MathF.Ceiling(HomeWanderRadius);
+        return GetHomeTargetArea(homePosition, radius);
+    }
+
+    // Computes and returns inside Home Range Target Area without mutating persistent game state.
+    private static Rectangle GetInsideHomeRangeTargetArea(Vector2 currentPosition, Vector2 homePosition)
+    {
+        Vector2 offsetFromHome = currentPosition - homePosition;
+        if (offsetFromHome == Vector2.Zero)
+        {
+            return new Rectangle((int)homePosition.X, (int)homePosition.Y, PlayerSize, PlayerSize);
+        }
+
+        Vector2 directionAwayFromHome = Vector2.Normalize(offsetFromHome);
+        float insideDistance = Math.Max(0f, HomeWanderRadius - SpawnedPokemonMoveDistance);
+        Vector2 targetPosition = homePosition + (directionAwayFromHome * insideDistance);
+        targetPosition = new Vector2(
+            MathF.Round(targetPosition.X / SpawnedPokemonMoveDistance) * SpawnedPokemonMoveDistance,
+            MathF.Round(targetPosition.Y / SpawnedPokemonMoveDistance) * SpawnedPokemonMoveDistance);
+
+        return new Rectangle((int)targetPosition.X, (int)targetPosition.Y, PlayerSize, PlayerSize);
+    }
+
+    // Computes and returns home Target Area without mutating persistent game state.
+    private static Rectangle GetHomeTargetArea(Vector2 homePosition, int radius)
+    {
         int size = (radius * 2) + PlayerSize;
         return new Rectangle(
             (int)homePosition.X - radius,

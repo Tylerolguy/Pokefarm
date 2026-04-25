@@ -187,6 +187,11 @@ public sealed partial class FarmGame
 
         foreach (PlacedItem item in _placedItems)
         {
+            if (_isHitboxDisplayMode && item.Definition == ItemCatalog.Bed)
+            {
+                DrawBedHomeRange(item);
+            }
+
             Texture2D texture = (item.Definition.IsBuildingLike || item.Definition.Kind == ItemKind.Snack) && item.Definition.HasCollision
                 ? _pixel
                 : _circleTexture;
@@ -214,6 +219,20 @@ public sealed partial class FarmGame
                 DrawBuildingWorkerIcons(item);
             }
         }
+    }
+
+    // Draws bed Home Range for the current frame using the active render context.
+    private void DrawBedHomeRange(PlacedItem bed)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Vector2 homePosition = GetBedHomePosition(bed);
+        Rectangle rangeBounds = GetHomeRangeTargetArea(homePosition);
+        _spriteBatch.Draw(_pixel, rangeBounds, new Color(84, 166, 255, 46));
+        DrawPanelBorder(rangeBounds, new Color(84, 166, 255, 168));
     }
 
     // Draws resource Exit Marker for the current frame using the active render context.
@@ -414,8 +433,25 @@ public sealed partial class FarmGame
                 isWalking: false,
                 walkFrame: 0,
                 idleFrame: pokemon.IsMoving ? 0 : pokemon.IdleAnimationFrame);
+            if (_isHitboxDisplayMode)
+            {
+                DrawPokemonHitbox(pokemon);
+            }
             DrawStatusMarker(pokemon);
         }
+    }
+
+    // Draws pokemon Hitbox for the current frame using the active render context.
+    private void DrawPokemonHitbox(SpawnedPokemon pokemon)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Rectangle hitbox = new((int)pokemon.Position.X, (int)pokemon.Position.Y, PlayerSize, PlayerSize);
+        _spriteBatch.Draw(_pixel, hitbox, new Color(220, 56, 56, 42));
+        DrawPanelBorder(hitbox, new Color(220, 56, 56, 210));
     }
 
     // Draws status Marker for the current frame using the active render context.

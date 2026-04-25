@@ -345,3 +345,5 @@ ditto can use skills
 
 
 
++ Bed show range when talking to
++ update pokemon wander behavoir

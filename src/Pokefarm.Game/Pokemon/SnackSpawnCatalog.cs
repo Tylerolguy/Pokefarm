@@ -27,10 +27,20 @@ internal static class SnackSpawnCatalog
             new WeightedPokemonSpawn("Tyrogue", 1f),
             new WeightedPokemonSpawn("Smoochum", 1f),
             new WeightedPokemonSpawn("Magby", 1f),
-            new WeightedPokemonSpawn("Nincada", 1f),
+            new WeightedPokemonSpawn("Sunkern", 50f),
             new WeightedPokemonSpawn("Elekid", 19f)
 
 
+        ],
+
+        [ItemCatalog.BasicSnack3] =
+        [
+            new WeightedPokemonSpawn("Dratini", 1f)
+        ],
+
+        [ItemCatalog.BasicSnack4] =
+        [
+            new WeightedPokemonSpawn("Noibat", 1f)
         ]
         
     };

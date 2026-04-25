@@ -19,7 +19,7 @@ internal static class SpawnedPokemonCatalog
         ["Azurill"] = new SpawnedPokemonDefinition(
             "Azurill",
             CreateSkillLevels((SkillType.Farming, 1))),
-        ["Sunkern"] = new SpawnedPokemonDefinition("Sunkern", NoSkills),
+        ["Sunkern"] = new SpawnedPokemonDefinition("Sunkern", CreateSkillLevels((SkillType.Planting, 1))),
         ["Pidgey"] = new SpawnedPokemonDefinition("Pidgey", NoSkills),
         ["Cleffa"] = new SpawnedPokemonDefinition("Cleffa", NoSkills),
         ["Igglybuff"] = new SpawnedPokemonDefinition("Igglybuff", NoSkills),
@@ -33,7 +33,9 @@ internal static class SpawnedPokemonCatalog
         ["Smoochum"] = new SpawnedPokemonDefinition("Smoochum", NoSkills),
         ["Magby"] = new SpawnedPokemonDefinition("Magby", NoSkills),
         ["Nincada"] = new SpawnedPokemonDefinition("Nincada", NoSkills),
-        ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1)))
+        ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1))),
+        ["Noibat"] = new SpawnedPokemonDefinition("Noibat", CreateSkillLevels((SkillType.Harvesting, 1))),
+        ["Dratini"] = new SpawnedPokemonDefinition("Dratini", CreateSkillLevels((SkillType.Water, 1)))
     };
 
     // Computes and returns or Default without mutating persistent game state.
