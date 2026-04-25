@@ -18,4 +18,16 @@ internal static class RecipeCatalog
         ],
         CraftingSource.BasicWorkBenchCrafting,
         5f);
+
+    public static readonly RecipeDefinition OranBerryPlant = new(
+        "Oran Berry",
+        ItemCatalog.OranBerry,
+        [],
+        CraftingSource.FarmGrowing);
+
+    public static readonly RecipeDefinition NoBerryPlant = new(
+        "No Berry",
+        ItemCatalog.NoBerry,
+        [],
+        CraftingSource.FarmGrowing);
 }

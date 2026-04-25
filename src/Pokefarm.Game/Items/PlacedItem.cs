@@ -17,6 +17,7 @@ internal sealed record PlacedItem(
     float StoredProductionEffort = 0f,
     int StoredProducedUnits = 0,
     int ProductionStepIndex = 0,
+    ItemDefinition? FarmGrowingPlant = null,
     ItemDefinition? WorkbenchQueuedItem = null,
     float WorkbenchCraftEffortRemaining = 0f,
     float WorkbenchCraftEffortRequired = 0f)

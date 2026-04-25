@@ -7,5 +7,7 @@ internal enum InputMode
     Placement,
     Removal,
     Crafting,
-    Talking
+    Talking,
+    PcMenu,
+    DungeonMenu
 }

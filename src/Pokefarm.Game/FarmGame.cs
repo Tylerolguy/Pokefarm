@@ -61,6 +61,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         new(ItemCatalog.WorkBench, 1),
         new(ItemCatalog.Tree, 2),
         new(ItemCatalog.Farm, 1),
+        new(ItemCatalog.DungeonPortal, 1),
         new(ItemCatalog.BasicSnack, 12),
         new(ItemCatalog.BasicSnack2, 11),
         new(ItemCatalog.Planter, 1),
@@ -69,9 +70,21 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     ];
     private readonly List<RecipeDefinition> _unlockedRecipes =
     [
+        RecipeCatalog.NoBerryPlant,
         RecipeCatalog.WorkBench,
-        RecipeCatalog.Bed
+        RecipeCatalog.Bed,
+        RecipeCatalog.OranBerryPlant
     ];
+    private readonly List<QuestDefinition> _activeQuests =
+    [
+        QuestCatalog.WelcomeHome,
+        QuestCatalog.BuildYourFarm
+    ];
+    private readonly List<DungeonDefinition> _availableDungeons =
+    [
+        DungeonCatalog.MysteryGrove
+    ];
+    private readonly List<string> _storedPcPokemonNames = [];
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private Texture2D? _circleTexture;
@@ -104,9 +117,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private float _playerIdleAnimationTimer;
     private int _playerIdleAnimationFrame;
     private int _selectedCraftingIndex;
+    private int _selectedPcMenuIndex;
+    private int _selectedDungeonIndex;
     private readonly TalkState _talkState = new();
     private CraftingSource _activeCraftingSource = CraftingSource.HandheldCrafting;
     private int _activeWorkbenchIndex = -1;
+    private int _activeFarmIndex = -1;
+    private int _activePcIndex = -1;
+    private PcMenuScreen _activePcMenuScreen = PcMenuScreen.Quests;
+    private GeneratedDungeon? _generatedDungeonPreview;
+    private GeneratedDungeon? _activeDungeonRun;
+    private int _activeDungeonRoomIndex = -1;
+    private int _activeDungeonPortalIndex = -1;
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
     private float _dialogueTransition;
@@ -162,6 +184,22 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
         _graphics.PreferredBackBufferWidth = 1280;
         _graphics.PreferredBackBufferHeight = 720;
+
+        Point pcSize = ItemCatalog.Pc.Size;
+        Rectangle pcBounds = new(
+            (_worldBounds.Width - pcSize.X) / 2,
+            (_worldBounds.Height - pcSize.Y) / 2,
+            pcSize.X,
+            pcSize.Y);
+        _placedItems.Add(new PlacedItem(pcBounds, ItemCatalog.Pc, 0d));
+
+        Point portalSize = ItemCatalog.DungeonPortal.Size;
+        Rectangle portalBounds = new(
+            Math.Clamp(pcBounds.Right + 48, BorderThickness, _worldBounds.Width - BorderThickness - portalSize.X),
+            Math.Clamp(pcBounds.Y, BorderThickness, _worldBounds.Height - BorderThickness - portalSize.Y),
+            portalSize.X,
+            portalSize.Y);
+        _placedItems.Add(new PlacedItem(portalBounds, ItemCatalog.DungeonPortal, 0d));
     }
 
     protected override void LoadContent()
@@ -301,9 +339,21 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             {
                 _inputMode = InputMode.Gameplay;
             }
+            else if (_inputMode == InputMode.PcMenu)
+            {
+                ClosePcMenu();
+            }
+            else if (_inputMode == InputMode.DungeonMenu)
+            {
+                CloseDungeonMenu();
+            }
             else if (_inputMode == InputMode.Talking)
             {
                 ExitTalkMode();
+            }
+            else if (_activeDungeonRun is not null)
+            {
+                LeaveActiveDungeonRun("LEFT");
             }
             else
             {
@@ -381,6 +431,34 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 CraftSelectedRecipe();
             }
         }
+        else if (_inputMode == InputMode.PcMenu)
+        {
+            UpdatePcMenuNavigation(moveUpPressed, moveDownPressed);
+
+            if (interactPressed)
+            {
+                ClosePcMenu();
+            }
+
+            if (confirmPressed)
+            {
+                ConfirmPcMenuOption();
+            }
+        }
+        else if (_inputMode == InputMode.DungeonMenu)
+        {
+            UpdateDungeonMenuNavigation(moveUpPressed, moveDownPressed);
+
+            if (interactPressed)
+            {
+                CloseDungeonMenu();
+            }
+
+            if (confirmPressed)
+            {
+                ConfirmDungeonMenuSelection();
+            }
+        }
         else if (_inputMode == InputMode.Talking)
         {
             if (_talkExitTimer > 0f)
@@ -412,10 +490,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             if (interactPressed)
             {
-                TryInteractWithBuilding();
+                if (_activeDungeonRun is not null)
+                {
+                    AdvanceDungeonRoomOrExit();
+                }
+                else
+                {
+                    TryInteractWithBuilding();
+                }
             }
 
-            if (talkPressed)
+            if (talkPressed && _activeDungeonRun is null)
             {
                 TryTalkWithPokemon();
             }
@@ -435,8 +520,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         UpdateResourceProduction(deltaTime);
         UpdateWorkbenchCrafting(deltaTime);
         UpdateSpawnedPokemon(deltaTime);
-        _interactTarget = _inputMode == InputMode.Gameplay ? FindInteractableTarget() : null;
-        _talkTargetIndex = _inputMode == InputMode.Gameplay ? FindNearbyPokemonTargetIndex() : -1;
+        _interactTarget = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindInteractableTarget() : null;
+        _talkTargetIndex = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindNearbyPokemonTargetIndex() : -1;
         if (_interactionMessageTimer > 0f)
         {
             _interactionMessageTimer = Math.Max(0f, _interactionMessageTimer - deltaTime);
@@ -467,11 +552,19 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         _spriteBatch.Begin(transformMatrix: _cameraMatrix);
-        DrawFarm();
-        DrawPlacedItems();
-        DrawSpawnedDittos();
-        DrawPlacementPreview();
-        DrawRemovalPreview();
+        if (_activeDungeonRun is not null)
+        {
+            DrawActiveDungeonRoom();
+        }
+        else
+        {
+            DrawFarm();
+            DrawPlacedItems();
+            DrawSpawnedDittos();
+            DrawPlacementPreview();
+            DrawRemovalPreview();
+        }
+
         DrawPlayer();
         _spriteBatch.End();
 
@@ -483,6 +576,14 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         else if (_inputMode == InputMode.Crafting)
         {
             DrawCraftingScreen();
+        }
+        else if (_inputMode == InputMode.PcMenu)
+        {
+            DrawPcMenuScreen();
+        }
+        else if (_inputMode == InputMode.DungeonMenu)
+        {
+            DrawDungeonMenuScreen();
         }
         else if (_inputMode == InputMode.Talking && _dialogueTransition >= 0.98f)
         {
@@ -516,6 +617,11 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
     private bool CollidesWithPlacedItem(Vector2 playerTopLeft)
     {
+        if (_activeDungeonRun is not null)
+        {
+            return false;
+        }
+
         Rectangle playerBounds = new(
             (int)playerTopLeft.X,
             (int)playerTopLeft.Y,
@@ -831,7 +937,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
             bool hasJob = assignedBuildingIndex >= 0;
-            bool jobHasWork = hasJob && _placedItems[assignedBuildingIndex].StoredProducedUnits < _placedItems[assignedBuildingIndex].Definition.MaxStoredProducedUnits;
+            bool jobHasWork = hasJob && HasAvailableProductionWork(_placedItems[assignedBuildingIndex]);
             bool workPathBlocked = false;
 
             if (jobHasWork)
@@ -1045,8 +1151,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         for (int index = 0; index < _placedItems.Count; index++)
         {
             PlacedItem building = _placedItems[index];
+            ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
             if (!building.Definition.IsResourceProduction ||
-                building.Definition.ProducedMaterial is null ||
+                producedMaterial is null ||
                 building.Definition.EffortPerProducedUnit <= 0f ||
                 building.Definition.MaxStoredProducedUnits <= 0)
             {
@@ -1186,8 +1293,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             PlacedItem building = _placedItems[assignedBuildingIndex];
-            bool buildingIsFull = building.StoredProducedUnits >= building.Definition.MaxStoredProducedUnits;
-            if (!buildingIsFull)
+            bool buildingHasWork = HasAvailableProductionWork(building);
+            if (buildingHasWork)
             {
                 _spawnedDittos[pokemonIndex] = pokemon with
                 {
@@ -1245,8 +1352,15 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         PlacedItem building = _placedItems[assignedBuildingIndex];
+        return !HasAvailableProductionWork(building);
+    }
+
+    private static bool HasAvailableProductionWork(PlacedItem building)
+    {
+        ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
         return building.Definition.IsResourceProduction &&
-               building.StoredProducedUnits >= building.Definition.MaxStoredProducedUnits;
+               producedMaterial is not null &&
+               building.StoredProducedUnits < building.Definition.MaxStoredProducedUnits;
     }
 
     private Vector2? TryPickRandomWanderTargetInHomeRange(SpawnedPokemon pokemon, int pokemonIndex)
@@ -1675,7 +1789,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             _spawnedDittos,
             CanAssignPokemonToResourceBuilding,
             IsBuildingExitWithinPokemonBedRange,
-            IsWorkbenchWithinPokemonBedRange);
+            IsWorkbenchWithinPokemonBedRange,
+            GetProducedMaterialForBuilding);
     }
 
     private void SetActiveTalkIcon(string pokemonName)
@@ -1886,6 +2001,27 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (_activeCraftingSource == CraftingSource.FarmGrowing)
+        {
+            if (_activeFarmIndex < 0 || _activeFarmIndex >= _placedItems.Count)
+            {
+                _interactionMessage = "NO FARM";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return;
+            }
+
+            PlacedItem farm = _placedItems[_activeFarmIndex];
+            if (farm.Definition != ItemCatalog.Farm)
+            {
+                _interactionMessage = "NO FARM";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return;
+            }
+
+            SetActiveFarmPlant(recipe.Output);
+            return;
+        }
+
         foreach (RecipeCost cost in recipe.Costs)
         {
             RemoveInventoryItem(cost.Item, cost.Quantity);
@@ -1908,6 +2044,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         {
             CraftingSource.HandheldCrafting => "HANDHELD CRAFTING",
             CraftingSource.BasicWorkBenchCrafting => "BASIC WORK BENCH",
+            CraftingSource.FarmGrowing => "GROWING MENU",
             _ => "CRAFTING"
         };
     }

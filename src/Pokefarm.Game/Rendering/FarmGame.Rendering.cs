@@ -34,6 +34,145 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(_pixel, new Rectangle(_worldBounds.Width - BorderThickness, 0, BorderThickness, _worldBounds.Height), boundary);
     }
 
+    private void DrawActiveDungeonRoom()
+    {
+        if (_spriteBatch is null || _pixel is null || _activeDungeonRun is null)
+        {
+            return;
+        }
+
+        Color roomBackground = new Color(48, 48, 54);
+        Color wallColor = new Color(26, 26, 30);
+        Color accentColor = new Color(136, 136, 144);
+        GeneratedDungeonRoom? activeRoom = GetActiveDungeonRoom();
+
+        if (activeRoom is not null)
+        {
+            DungeonRoomTemplate template = activeRoom.Definition.Template;
+            switch (activeRoom.Definition.Type)
+            {
+                case DungeonRoomType.Reward:
+                    roomBackground = new Color(72, 86, 60);
+                    wallColor = new Color(38, 44, 30);
+                    accentColor = new Color(182, 206, 128);
+                    break;
+                case DungeonRoomType.Trap:
+                    roomBackground = new Color(96, 64, 56);
+                    wallColor = new Color(52, 30, 26);
+                    accentColor = new Color(216, 130, 104);
+                    break;
+                case DungeonRoomType.Puzzle:
+                    roomBackground = new Color(68, 72, 100);
+                    wallColor = new Color(36, 40, 58);
+                    accentColor = new Color(146, 166, 228);
+                    break;
+                case DungeonRoomType.Enemy:
+                    roomBackground = new Color(90, 54, 94);
+                    wallColor = new Color(46, 24, 52);
+                    accentColor = new Color(196, 128, 210);
+                    break;
+            }
+
+            int tileRenderSize = 48;
+            int roomRenderWidth = template.Size.X * tileRenderSize;
+            int roomRenderHeight = template.Size.Y * tileRenderSize;
+            int roomStartX = _worldBounds.Center.X - (roomRenderWidth / 2);
+            int roomStartY = _worldBounds.Center.Y - (roomRenderHeight / 2);
+
+            for (int y = 0; y < _worldBounds.Height; y += TileSize)
+            {
+                for (int x = 0; x < _worldBounds.Width; x += TileSize)
+                {
+                    _spriteBatch.Draw(_pixel, new Rectangle(x, y, TileSize, TileSize), roomBackground);
+                }
+            }
+
+            Rectangle roomBounds = new(roomStartX, roomStartY, roomRenderWidth, roomRenderHeight);
+            _spriteBatch.Draw(_pixel, roomBounds, new Color(roomBackground.R, roomBackground.G, roomBackground.B, (byte)220));
+            DrawPanelBorder(roomBounds, accentColor);
+
+            for (int y = 0; y < template.Size.Y; y++)
+            {
+                for (int x = 0; x < template.Size.X; x++)
+                {
+                    char tile = template.LayoutRows[y][x];
+                    Rectangle tileRect = new(
+                        roomStartX + (x * tileRenderSize),
+                        roomStartY + (y * tileRenderSize),
+                        tileRenderSize,
+                        tileRenderSize);
+
+                    if (tile == '#')
+                    {
+                        _spriteBatch.Draw(_pixel, tileRect, wallColor);
+                        DrawPanelBorder(tileRect, new Color(18, 18, 22));
+                    }
+                    else
+                    {
+                        _spriteBatch.Draw(_pixel, tileRect, new Color(roomBackground.R, roomBackground.G, roomBackground.B, (byte)160));
+                    }
+                }
+            }
+
+            foreach (DungeonObstacleDefinition obstacle in template.Obstacles)
+            {
+                Rectangle obstacleRect = new(
+                    roomStartX + (obstacle.Position.X * tileRenderSize),
+                    roomStartY + (obstacle.Position.Y * tileRenderSize),
+                    obstacle.Size.X * tileRenderSize,
+                    obstacle.Size.Y * tileRenderSize);
+                _spriteBatch.Draw(_pixel, obstacleRect, new Color(accentColor.R, accentColor.G, accentColor.B, (byte)120));
+                DrawPanelBorder(obstacleRect, accentColor);
+            }
+
+            DrawDungeonSpawnMarkers(template, roomStartX, roomStartY, tileRenderSize);
+            return;
+        }
+
+        for (int y = 0; y < _worldBounds.Height; y += TileSize)
+        {
+            for (int x = 0; x < _worldBounds.Width; x += TileSize)
+            {
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, TileSize, TileSize), roomBackground);
+            }
+        }
+
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, _worldBounds.Width, BorderThickness), wallColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(0, _worldBounds.Height - BorderThickness, _worldBounds.Width, BorderThickness), wallColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, BorderThickness, _worldBounds.Height), wallColor);
+        _spriteBatch.Draw(_pixel, new Rectangle(_worldBounds.Width - BorderThickness, 0, BorderThickness, _worldBounds.Height), wallColor);
+    }
+
+    private void DrawDungeonSpawnMarkers(DungeonRoomTemplate template, int roomStartX, int roomStartY, int tileRenderSize)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        foreach (DungeonSpawnPoint spawnPoint in template.SpawnPoints)
+        {
+            Color markerColor = spawnPoint.Type switch
+            {
+                DungeonSpawnPointType.PlayerStart => new Color(120, 220, 120),
+                DungeonSpawnPointType.Exit => new Color(220, 220, 120),
+                DungeonSpawnPointType.EnemySpawn => new Color(220, 120, 120),
+                DungeonSpawnPointType.RewardSpawn => new Color(120, 220, 220),
+                DungeonSpawnPointType.PuzzleAnchor => new Color(160, 160, 240),
+                DungeonSpawnPointType.TrapAnchor => new Color(220, 150, 110),
+                _ => new Color(200, 200, 200)
+            };
+
+            int markerSize = Math.Max(6, tileRenderSize / 4);
+            Rectangle markerRect = new(
+                roomStartX + (spawnPoint.Position.X * tileRenderSize) + ((tileRenderSize - markerSize) / 2),
+                roomStartY + (spawnPoint.Position.Y * tileRenderSize) + ((tileRenderSize - markerSize) / 2),
+                markerSize,
+                markerSize);
+            _spriteBatch.Draw(_pixel, markerRect, markerColor);
+        }
+    }
+
     private void DrawPlacedItems()
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null)
@@ -106,7 +245,8 @@ public sealed partial class FarmGame
             ? 1f
             : MathHelper.Clamp(building.StoredProductionEffort / building.Definition.EffortPerProducedUnit, 0f, 1f);
 
-        DrawProgressCircleAtBuildingCenter(building, progress);
+        Color fillColor = GetProductionProgressFillColor(building);
+        DrawProgressCircleAtBuildingCenter(building, progress, fillColor);
     }
 
     private void DrawWorkbenchCraftingProgressCircle(PlacedItem workbench)
@@ -118,10 +258,10 @@ public sealed partial class FarmGame
 
         float completed = Math.Max(0f, workbench.WorkbenchCraftEffortRequired - workbench.WorkbenchCraftEffortRemaining);
         float progress = MathHelper.Clamp(completed / workbench.WorkbenchCraftEffortRequired, 0f, 1f);
-        DrawProgressCircleAtBuildingCenter(workbench, progress);
+        DrawProgressCircleAtBuildingCenter(workbench, progress, new Color(91, 188, 110, 235));
     }
 
-    private void DrawProgressCircleAtBuildingCenter(PlacedItem building, float progress)
+    private void DrawProgressCircleAtBuildingCenter(PlacedItem building, float progress, Color fillColor)
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null)
         {
@@ -154,11 +294,33 @@ public sealed partial class FarmGame
 
             if (row >= diameter - filledRows)
             {
-                _spriteBatch.Draw(_pixel, new Rectangle(rowStartX, rowY, rowWidth, 1), new Color(91, 188, 110, 235));
+                _spriteBatch.Draw(_pixel, new Rectangle(rowStartX, rowY, rowWidth, 1), fillColor);
             }
         }
 
         DrawPanelBorder(circleBounds, new Color(181, 138, 95));
+    }
+
+    private static Color GetProductionProgressFillColor(PlacedItem building)
+    {
+        if (building.Definition == ItemCatalog.Farm)
+        {
+            int stepIndex = Math.Clamp(building.ProductionStepIndex, 0, 2);
+            return stepIndex switch
+            {
+                0 => new Color(91, 188, 110, 235),   // Planting
+                1 => new Color(112, 188, 236, 235),  // Watering
+                _ => new Color(166, 198, 86, 235)    // Harvesting
+            };
+        }
+
+        return building.Definition.RequiredSkill switch
+        {
+            SkillType.Lumber => new Color(176, 123, 73, 235),
+            SkillType.Farming => new Color(91, 188, 110, 235),
+            SkillType.Crafting => new Color(104, 164, 214, 235),
+            _ => new Color(91, 188, 110, 235)
+        };
     }
 
     private void DrawBuildingWorkerIcons(PlacedItem building)
@@ -367,10 +529,17 @@ public sealed partial class FarmGame
         Rectangle overlay = new(0, 0, viewport.Width, viewport.Height);
         Rectangle panel = new(viewport.Width / 2 - 360, viewport.Height / 2 - 240, 720, 480);
         Rectangle listArea = new(panel.X + 36, panel.Y + 114, panel.Width - 72, panel.Height - 150);
+        bool isGrowingMenu = _activeCraftingSource == CraftingSource.FarmGrowing;
+        Color panelFill = isGrowingMenu ? new Color(35, 72, 42, 245) : new Color(44, 31, 23, 245);
+        Color panelBorder = isGrowingMenu ? new Color(128, 190, 132) : new Color(181, 138, 95);
+        Color overlayTint = isGrowingMenu ? new Color(14, 28, 16, 210) : new Color(20, 14, 10, 210);
+        Color selectedRowFill = isGrowingMenu ? new Color(24, 56, 33) : new Color(88, 66, 49);
+        Color unselectedRowFill = isGrowingMenu ? new Color(42, 88, 52) : new Color(58, 43, 33);
+        Color unselectedRowBorder = isGrowingMenu ? new Color(102, 156, 106) : new Color(120, 90, 65);
 
-        _spriteBatch.Draw(_pixel, overlay, new Color(20, 14, 10, 210));
-        _spriteBatch.Draw(_pixel, panel, new Color(44, 31, 23, 245));
-        DrawPanelBorder(panel, new Color(181, 138, 95));
+        _spriteBatch.Draw(_pixel, overlay, overlayTint);
+        _spriteBatch.Draw(_pixel, panel, panelFill);
+        DrawPanelBorder(panel, panelBorder);
         DrawPixelText(GetCraftingTitle(), new Vector2(panel.X + 24, panel.Y + 18), new Color(236, 220, 196));
 
         if (_activeCraftingSource == CraftingSource.BasicWorkBenchCrafting &&
@@ -389,6 +558,16 @@ public sealed partial class FarmGame
                 ? $"COMPLETED: {completedItem.Name.ToUpperInvariant()}"
                 : "COMPLETED: NONE";
             DrawPixelText(completedText, new Vector2(panel.X + 24, panel.Y + 62), new Color(196, 226, 180));
+        }
+        else if (_activeCraftingSource == CraftingSource.FarmGrowing &&
+                 _activeFarmIndex >= 0 &&
+                 _activeFarmIndex < _placedItems.Count &&
+                 _placedItems[_activeFarmIndex].Definition == ItemCatalog.Farm)
+        {
+            PlacedItem farm = _placedItems[_activeFarmIndex];
+            ItemDefinition currentPlant = farm.FarmGrowingPlant ?? ItemCatalog.NoBerry;
+            DrawPixelText($"CURRENT PLANT: {currentPlant.Name.ToUpperInvariant()}", new Vector2(panel.X + 24, panel.Y + 44), new Color(210, 190, 164));
+            DrawPixelText("SPACE SETS SELECTED PLANT", new Vector2(panel.X + 24, panel.Y + 62), new Color(196, 226, 180));
         }
 
         if (activeRecipes.Count == 0)
@@ -418,8 +597,8 @@ public sealed partial class FarmGame
             bool selected = recipeIndex == _selectedCraftingIndex;
             bool canCraft = CanCraftRecipe(recipe);
 
-            _spriteBatch.Draw(_pixel, rowBounds, selected ? new Color(88, 66, 49) : new Color(58, 43, 33));
-            DrawPanelBorder(rowBounds, selected ? Color.Gold : new Color(120, 90, 65));
+            _spriteBatch.Draw(_pixel, rowBounds, selected ? selectedRowFill : unselectedRowFill);
+            DrawPanelBorder(rowBounds, selected ? Color.Gold : unselectedRowBorder);
 
             DrawPixelText(recipe.Output.Name.ToUpperInvariant(), new Vector2(rowBounds.X + 16, rowBounds.Y + 12), new Color(236, 220, 196));
             string inventoryText = $"IN INVENTORY {GetInventoryQuantity(recipe.Output)}";
@@ -442,6 +621,229 @@ public sealed partial class FarmGame
                 canCraft ? "SPACE MAKE" : "NEED ITEMS",
                 new Vector2(rowBounds.Right - 142, rowBounds.Y + 34),
                 canCraft ? new Color(224, 210, 158) : new Color(180, 130, 110));
+        }
+    }
+
+    private void DrawPcMenuScreen()
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Viewport viewport = GraphicsDevice.Viewport;
+        Rectangle overlay = new(0, 0, viewport.Width, viewport.Height);
+        Rectangle panel = new(viewport.Width / 2 - 360, viewport.Height / 2 - 240, 720, 480);
+        Rectangle listArea = new(panel.X + 36, panel.Y + 84, panel.Width - 72, panel.Height - 126);
+
+        GetPcMenuTheme(_activePcMenuScreen, out Color overlayTint, out Color panelFill, out Color panelBorder, out Color rowFill, out Color rowBorder);
+
+        _spriteBatch.Draw(_pixel, overlay, overlayTint);
+        _spriteBatch.Draw(_pixel, panel, panelFill);
+        DrawPanelBorder(panel, panelBorder);
+        DrawPixelText(GetPcMenuTitle(), new Vector2(panel.X + 24, panel.Y + 18), new Color(236, 220, 196));
+
+        if (_activePcMenuScreen == PcMenuScreen.Level)
+        {
+            DrawPixelText("LEVEL 1", new Vector2(panel.X + 24, panel.Y + 58), new Color(236, 220, 196));
+            List<SpawnedPokemon> claimedPokemon = _spawnedDittos
+                .Where(pokemon => pokemon.IsClaimed)
+                .ToList();
+
+            if (claimedPokemon.Count == 0)
+            {
+                DrawPixelText("NO CLAIMED POKEMON", new Vector2(panel.X + 24, panel.Y + 86), new Color(210, 190, 164));
+            }
+            else
+            {
+                DrawPixelText("CLAIMED TEAM", new Vector2(panel.X + 24, panel.Y + 86), new Color(210, 190, 164));
+                const int iconSize = 44;
+                const int iconPadding = 10;
+                int iconsPerRow = Math.Max(1, (panel.Width - 48) / (iconSize + iconPadding));
+                for (int index = 0; index < claimedPokemon.Count; index++)
+                {
+                    int row = index / iconsPerRow;
+                    int column = index % iconsPerRow;
+                    int iconX = panel.X + 24 + (column * (iconSize + iconPadding));
+                    int iconY = panel.Y + 108 + (row * (iconSize + iconPadding));
+                    Rectangle iconBounds = new(iconX, iconY, iconSize, iconSize);
+                    _spriteBatch.Draw(_pixel, iconBounds, new Color(58, 43, 33));
+                    DrawPanelBorder(iconBounds, new Color(120, 90, 65));
+
+                    SpawnedPokemon pokemon = claimedPokemon[index];
+                    if (TryGetPokemonIconTexture(pokemon.Name, out Texture2D? iconTexture) && iconTexture is not null)
+                    {
+                        Rectangle innerBounds = new(iconBounds.X + 4, iconBounds.Y + 4, iconBounds.Width - 8, iconBounds.Height - 8);
+                        _spriteBatch.Draw(iconTexture, innerBounds, Color.White);
+                    }
+                    else
+                    {
+                        DrawPixelText("?", new Vector2(iconBounds.X + 16, iconBounds.Y + 13), new Color(236, 220, 196));
+                    }
+                }
+            }
+
+            DrawPixelText("PRESS E TO CLOSE", new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
+            return;
+        }
+
+        List<string> entries = GetPcMenuEntries();
+        if (entries.Count == 0)
+        {
+            DrawPixelText(
+                _activePcMenuScreen == PcMenuScreen.Quests ? "NO QUESTS" : "NO POKEMON STORED",
+                new Vector2(panel.X + 24, panel.Y + 58),
+                new Color(236, 220, 196));
+            DrawPixelText("PRESS E TO CLOSE", new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
+            return;
+        }
+
+        int rowHeight = 58;
+        int visibleRows = Math.Max(1, listArea.Height / rowHeight);
+        int scrollOffset = Math.Clamp(_selectedPcMenuIndex - visibleRows + 1, 0, Math.Max(0, entries.Count - visibleRows));
+
+        for (int visibleIndex = 0; visibleIndex < visibleRows; visibleIndex++)
+        {
+            int entryIndex = scrollOffset + visibleIndex;
+            if (entryIndex >= entries.Count)
+            {
+                break;
+            }
+
+            Rectangle rowBounds = new(
+                listArea.X,
+                listArea.Y + (visibleIndex * rowHeight),
+                listArea.Width,
+                rowHeight - 8);
+            bool selected = entryIndex == _selectedPcMenuIndex;
+
+            _spriteBatch.Draw(_pixel, rowBounds, selected ? new Color(38, 30, 28) : rowFill);
+            DrawPanelBorder(rowBounds, selected ? Color.Gold : rowBorder);
+            DrawPixelText(entries[entryIndex].ToUpperInvariant(), new Vector2(rowBounds.X + 14, rowBounds.Y + 16), new Color(236, 220, 196));
+        }
+
+        string footerText = _activePcMenuScreen == PcMenuScreen.Storage
+            ? "SPACE RELEASE  E CLOSE"
+            : "E CLOSE";
+        DrawPixelText(footerText, new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
+    }
+
+    private static void GetPcMenuTheme(
+        PcMenuScreen screen,
+        out Color overlayTint,
+        out Color panelFill,
+        out Color panelBorder,
+        out Color rowFill,
+        out Color rowBorder)
+    {
+        switch (screen)
+        {
+            case PcMenuScreen.Quests:
+                overlayTint = new Color(30, 10, 10, 210);
+                panelFill = new Color(108, 34, 34, 245);
+                panelBorder = new Color(214, 124, 124);
+                rowFill = new Color(136, 46, 46);
+                rowBorder = new Color(182, 94, 94);
+                return;
+            case PcMenuScreen.Storage:
+                overlayTint = new Color(8, 18, 36, 210);
+                panelFill = new Color(30, 62, 132, 245);
+                panelBorder = new Color(120, 168, 236);
+                rowFill = new Color(42, 80, 156);
+                rowBorder = new Color(94, 136, 198);
+                return;
+            default:
+                overlayTint = new Color(22, 12, 34, 210);
+                panelFill = new Color(80, 44, 116, 245);
+                panelBorder = new Color(176, 130, 226);
+                rowFill = new Color(100, 58, 142);
+                rowBorder = new Color(148, 104, 194);
+                return;
+        }
+    }
+
+    private string GetPcMenuTitle()
+    {
+        return _activePcMenuScreen switch
+        {
+            PcMenuScreen.Quests => "QUESTS",
+            PcMenuScreen.Storage => "PC STORAGE",
+            PcMenuScreen.Level => "LEVEL",
+            _ => "PC"
+        };
+    }
+
+    private List<string> GetPcMenuEntries()
+    {
+        if (_activePcMenuScreen == PcMenuScreen.Quests)
+        {
+            return _activeQuests.ConvertAll(quest => quest.Name);
+        }
+
+        if (_activePcMenuScreen == PcMenuScreen.Storage)
+        {
+            return [.. _storedPcPokemonNames];
+        }
+
+        return [];
+    }
+
+    private void DrawDungeonMenuScreen()
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Viewport viewport = GraphicsDevice.Viewport;
+        Rectangle overlay = new(0, 0, viewport.Width, viewport.Height);
+        Rectangle panel = new(viewport.Width / 2 - 420, viewport.Height / 2 - 250, 840, 500);
+        Rectangle dungeonListArea = new(panel.X + 24, panel.Y + 78, 280, panel.Height - 120);
+        Rectangle roomPreviewArea = new(dungeonListArea.Right + 18, panel.Y + 78, panel.Right - dungeonListArea.Right - 42, panel.Height - 120);
+
+        _spriteBatch.Draw(_pixel, overlay, new Color(12, 12, 14, 215));
+        _spriteBatch.Draw(_pixel, panel, new Color(62, 62, 68, 245));
+        DrawPanelBorder(panel, new Color(170, 170, 176));
+        DrawPixelText("DUNGEON PORTAL", new Vector2(panel.X + 24, panel.Y + 18), new Color(236, 236, 240));
+        DrawPixelText("SPACE ENTER DUNGEON  E CLOSE", new Vector2(panel.X + 24, panel.Y + 42), new Color(204, 204, 212));
+
+        _spriteBatch.Draw(_pixel, dungeonListArea, new Color(48, 48, 54));
+        DrawPanelBorder(dungeonListArea, new Color(126, 126, 132));
+        DrawPixelText("DUNGEONS", new Vector2(dungeonListArea.X + 12, dungeonListArea.Y + 10), new Color(230, 230, 236));
+
+        if (_availableDungeons.Count == 0)
+        {
+            DrawPixelText("NONE", new Vector2(dungeonListArea.X + 12, dungeonListArea.Y + 34), new Color(220, 220, 220));
+        }
+        else
+        {
+            for (int index = 0; index < _availableDungeons.Count; index++)
+            {
+                Rectangle row = new(dungeonListArea.X + 10, dungeonListArea.Y + 34 + (index * 26), dungeonListArea.Width - 20, 22);
+                bool selected = index == _selectedDungeonIndex;
+                _spriteBatch.Draw(_pixel, row, selected ? new Color(70, 70, 78) : new Color(54, 54, 60));
+                DrawPanelBorder(row, selected ? Color.Gold : new Color(110, 110, 118));
+                DrawPixelText(_availableDungeons[index].Name.ToUpperInvariant(), new Vector2(row.X + 8, row.Y + 5), new Color(236, 236, 240));
+            }
+        }
+
+        _spriteBatch.Draw(_pixel, roomPreviewArea, new Color(48, 48, 54));
+        DrawPanelBorder(roomPreviewArea, new Color(126, 126, 132));
+        DrawPixelText("ROOM PREVIEW", new Vector2(roomPreviewArea.X + 12, roomPreviewArea.Y + 10), new Color(230, 230, 236));
+
+        if (_generatedDungeonPreview is null)
+        {
+            DrawPixelText("ENTER TO GENERATE ROOMS", new Vector2(roomPreviewArea.X + 12, roomPreviewArea.Y + 36), new Color(220, 220, 220));
+            return;
+        }
+
+        DrawPixelText(_generatedDungeonPreview.DungeonName.ToUpperInvariant(), new Vector2(roomPreviewArea.X + 12, roomPreviewArea.Y + 36), new Color(236, 236, 240));
+        int maxVisibleRooms = Math.Max(1, (roomPreviewArea.Height - 70) / 20);
+        for (int index = 0; index < _generatedDungeonPreview.Rooms.Count && index < maxVisibleRooms; index++)
+        {
+            GeneratedDungeonRoom room = _generatedDungeonPreview.Rooms[index];
+            string roomText = $"{room.Index}. {room.Definition.Type.ToString().ToUpperInvariant()} - {room.Definition.Name.ToUpperInvariant()}";
+            DrawPixelText(roomText, new Vector2(roomPreviewArea.X + 12, roomPreviewArea.Y + 58 + (index * 20)), new Color(220, 220, 228));
         }
     }
 
@@ -597,6 +999,24 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (_activeDungeonRun is not null)
+        {
+            GeneratedDungeonRoom? activeRoom = GetActiveDungeonRoom();
+            if (activeRoom is not null)
+            {
+                string roomText = $"ROOM {_activeDungeonRoomIndex + 1}/{_activeDungeonRun.Rooms.Count} {activeRoom.Definition.Name.ToUpperInvariant()}";
+                DrawPromptPanel(roomText, new Point(GraphicsDevice.Viewport.Width / 2, 48));
+                DrawPromptPanel("PRESS E FOR NEXT ROOM", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
+            }
+
+            if (!string.IsNullOrEmpty(_interactionMessage))
+            {
+                DrawPromptPanel(_interactionMessage, new Point(GraphicsDevice.Viewport.Width / 2, 96));
+            }
+
+            return;
+        }
+
         if (_talkTargetIndex >= 0)
         {
             string pokemonName = _spawnedDittos[_talkTargetIndex].Name.ToUpperInvariant();
@@ -617,6 +1037,18 @@ public sealed partial class FarmGame
         {
             DrawPromptPanel(_interactionMessage, new Point(GraphicsDevice.Viewport.Width / 2, 48));
         }
+    }
+
+    private GeneratedDungeonRoom? GetActiveDungeonRoom()
+    {
+        if (_activeDungeonRun is null ||
+            _activeDungeonRoomIndex < 0 ||
+            _activeDungeonRoomIndex >= _activeDungeonRun.Rooms.Count)
+        {
+            return null;
+        }
+
+        return _activeDungeonRun.Rooms[_activeDungeonRoomIndex];
     }
 
     private void DrawTalkScreen()

@@ -150,6 +150,32 @@ public sealed partial class FarmGame
         return Vector2.DistanceSquared(homePosition, workbenchCenter) <= HomeWanderRadius * HomeWanderRadius;
     }
 
+    private void SetActiveFarmPlant(ItemDefinition plant)
+    {
+        if (_activeFarmIndex < 0 || _activeFarmIndex >= _placedItems.Count)
+        {
+            return;
+        }
+
+        PlacedItem farm = _placedItems[_activeFarmIndex];
+        if (farm.Definition != ItemCatalog.Farm)
+        {
+            return;
+        }
+
+        _placedItems[_activeFarmIndex] = farm with
+        {
+            FarmGrowingPlant = plant,
+            StoredProducedUnits = 0,
+            StoredProductionEffort = 0f,
+            ProductionStepIndex = 0
+        };
+
+        _interactTarget = _placedItems[_activeFarmIndex];
+        _interactionMessage = $"PLANT SET TO {plant.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
     private void AssignPokemonHome(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Bed)
@@ -325,8 +351,9 @@ public sealed partial class FarmGame
         }
 
         PlacedItem building = _placedItems[buildingIndex];
+        ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
         if (!building.Definition.IsResourceProduction ||
-            building.Definition.ProducedMaterial is not ItemDefinition producedMaterial ||
+            producedMaterial is null ||
             building.StoredProducedUnits <= 0)
         {
             _talkState.SetText("NOTHING TO COLLECT");
@@ -440,5 +467,25 @@ public sealed partial class FarmGame
     {
         SkillType requiredSkill = buildingDefinition.RequiredSkill;
         return requiredSkill == SkillType.None || pokemon.GetSkillLevel(requiredSkill) > 0;
+    }
+
+    private static ItemDefinition? GetProducedMaterialForBuilding(PlacedItem building)
+    {
+        if (!building.Definition.IsResourceProduction)
+        {
+            return null;
+        }
+
+        if (building.Definition == ItemCatalog.Farm)
+        {
+            if (building.FarmGrowingPlant is null || building.FarmGrowingPlant == ItemCatalog.NoBerry)
+            {
+                return null;
+            }
+
+            return building.FarmGrowingPlant;
+        }
+
+        return building.Definition.ProducedMaterial;
     }
 }

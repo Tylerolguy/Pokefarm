@@ -12,7 +12,8 @@ internal static class BuildingDialogueService
         IReadOnlyList<SpawnedPokemon> spawnedPokemon,
         Func<SpawnedPokemon, PlacedItem, bool> canAssignToResourceBuilding,
         Func<SpawnedPokemon, PlacedItem, bool> isBuildingExitWithinBedRange,
-        Func<SpawnedPokemon, PlacedItem, bool> isWorkbenchWithinBedRange)
+        Func<SpawnedPokemon, PlacedItem, bool> isWorkbenchWithinBedRange,
+        Func<PlacedItem, ItemDefinition?> getProducedMaterialForBuilding)
     {
         List<PokemonDialogueOption> options = [];
         if (building.Definition == ItemCatalog.Bed)
@@ -72,8 +73,36 @@ internal static class BuildingDialogueService
                     TargetPokemonId: building.WorkerPokemonId.Value));
             }
         }
+        else if (building.Definition == ItemCatalog.Pc)
+        {
+            options.Add(new PokemonDialogueOption("ACCESS QUESTS", PokemonDialogueAction.OpenPcQuests));
+            options.Add(new PokemonDialogueOption("CHECK LEVEL", PokemonDialogueAction.OpenPcLevel));
+            options.Add(new PokemonDialogueOption("ACCESS PC", PokemonDialogueAction.OpenPcStorage));
+
+            foreach (SpawnedPokemon pokemon in spawnedPokemon)
+            {
+                if (!pokemon.IsFollowingPlayer)
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"STORE {pokemon.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.StorePokemonInPc,
+                    TargetPokemonId: pokemon.PokemonId));
+            }
+        }
+        else if (building.Definition == ItemCatalog.DungeonPortal)
+        {
+            options.Add(new PokemonDialogueOption("ACCESS DUNGEONS", PokemonDialogueAction.OpenDungeonMenu));
+        }
         else if (building.Definition.IsResourceProduction)
         {
+            if (building.Definition == ItemCatalog.Farm)
+            {
+                options.Add(new PokemonDialogueOption("GROW PLANTS", PokemonDialogueAction.OpenFarmGrowingMenu));
+            }
+
             foreach (SpawnedPokemon pokemon in spawnedPokemon)
             {
                 if (!pokemon.IsFollowingPlayer)
@@ -114,7 +143,8 @@ internal static class BuildingDialogueService
                     TargetPokemonId: worker.PokemonId));
             }
 
-            if (building.Definition.ProducedMaterial is ItemDefinition producedMaterial && building.StoredProducedUnits > 0)
+            ItemDefinition? producedMaterial = getProducedMaterialForBuilding(building);
+            if (producedMaterial is not null && building.StoredProducedUnits > 0)
             {
                 options.Add(new PokemonDialogueOption(
                     $"TAKE {building.StoredProducedUnits} {producedMaterial.Name.ToUpperInvariant()}",

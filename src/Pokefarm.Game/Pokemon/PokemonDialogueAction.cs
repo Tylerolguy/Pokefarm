@@ -11,8 +11,14 @@ internal enum PokemonDialogueAction
     AssignWorkbenchWorker,
     UnassignWorkbenchWorker,
     OpenWorkbenchQueue,
+    OpenFarmGrowingMenu,
     DequeueWorkbenchItem,
     CollectWorkbenchItem,
+    OpenPcQuests,
+    OpenPcLevel,
+    OpenPcStorage,
+    OpenDungeonMenu,
+    StorePokemonInPc,
     SetText,
     Exit
 }

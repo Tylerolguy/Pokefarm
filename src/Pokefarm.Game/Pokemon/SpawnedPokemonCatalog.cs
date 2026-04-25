@@ -12,7 +12,8 @@ internal static class SpawnedPokemonCatalog
     {
         ["Sewaddle"] = new SpawnedPokemonDefinition(
             "Sewaddle",
-            CreateSkillLevels((SkillType.Lumber, 1), (SkillType.Farming, 1))),
+            CreateSkillLevels((SkillType.Lumber, 1), (SkillType.Farming, 1), (SkillType.Water, 1), 
+            (SkillType.Planting, 1), (SkillType.Harvesting, 1))),
         ["Azurill"] = new SpawnedPokemonDefinition(
             "Azurill",
             CreateSkillLevels((SkillType.Farming, 1))),

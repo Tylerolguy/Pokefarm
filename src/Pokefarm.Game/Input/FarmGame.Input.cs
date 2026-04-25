@@ -398,8 +398,9 @@ public sealed partial class FarmGame
             }
         }
 
+        ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(_removeTarget);
         if (_removeTarget.Definition.IsResourceProduction &&
-            _removeTarget.Definition.ProducedMaterial is ItemDefinition producedMaterial &&
+            producedMaterial is not null &&
             _removeTarget.StoredProducedUnits > 0)
         {
             AddInventoryItem(producedMaterial, _removeTarget.StoredProducedUnits);
@@ -445,9 +446,14 @@ public sealed partial class FarmGame
     {
         _activeCraftingSource = craftingSource;
         _activeWorkbenchIndex = -1;
+        _activeFarmIndex = -1;
         if (craftingSource == CraftingSource.BasicWorkBenchCrafting && _interactTarget?.Definition == ItemCatalog.WorkBench)
         {
             _activeWorkbenchIndex = _placedItems.FindIndex(item => item == _interactTarget);
+        }
+        else if (craftingSource == CraftingSource.FarmGrowing && _interactTarget?.Definition == ItemCatalog.Farm)
+        {
+            _activeFarmIndex = _placedItems.FindIndex(item => item == _interactTarget);
         }
 
         _inputMode = InputMode.Crafting;
@@ -663,6 +669,47 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.OpenFarmGrowingMenu)
+        {
+            if (_talkState.ActiveBuilding is not null)
+            {
+                _interactTarget = _talkState.ActiveBuilding;
+            }
+
+            OpenCrafting(CraftingSource.FarmGrowing);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.OpenPcQuests)
+        {
+            OpenPcMenu(PcMenuScreen.Quests);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.OpenPcStorage)
+        {
+            OpenPcMenu(PcMenuScreen.Storage);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.OpenPcLevel)
+        {
+            OpenPcMenu(PcMenuScreen.Level);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.OpenDungeonMenu)
+        {
+            OpenDungeonMenu();
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.StorePokemonInPc && selectedOption.TargetPokemonId.HasValue)
+        {
+            StoreFollowingPokemonInPc(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.DequeueWorkbenchItem)
         {
             DequeueActiveWorkbenchItem();
@@ -751,5 +798,339 @@ public sealed partial class FarmGame
 
         _ = moveLeft;
         _ = moveRight;
+    }
+
+    private void OpenPcMenu(PcMenuScreen screen)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Pc)
+        {
+            return;
+        }
+
+        _activePcIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (_activePcIndex < 0)
+        {
+            return;
+        }
+
+        _activePcMenuScreen = screen;
+        _selectedPcMenuIndex = 0;
+        _inputMode = InputMode.PcMenu;
+        _talkExitTimer = 0f;
+    }
+
+    private void ClosePcMenu()
+    {
+        _inputMode = InputMode.Gameplay;
+        _selectedPcMenuIndex = 0;
+        _activePcIndex = -1;
+    }
+
+    private void UpdatePcMenuNavigation(bool moveUp, bool moveDown)
+    {
+        int count = GetPcMenuEntryCount();
+        if (count <= 0)
+        {
+            _selectedPcMenuIndex = 0;
+            return;
+        }
+
+        if (moveUp)
+        {
+            _selectedPcMenuIndex = Math.Max(0, _selectedPcMenuIndex - 1);
+        }
+
+        if (moveDown)
+        {
+            _selectedPcMenuIndex = Math.Min(count - 1, _selectedPcMenuIndex + 1);
+        }
+    }
+
+    private void ConfirmPcMenuOption()
+    {
+        if (_inputMode != InputMode.PcMenu || _activePcMenuScreen != PcMenuScreen.Storage)
+        {
+            return;
+        }
+
+        if (_storedPcPokemonNames.Count == 0 ||
+            _selectedPcMenuIndex < 0 ||
+            _selectedPcMenuIndex >= _storedPcPokemonNames.Count)
+        {
+            return;
+        }
+
+        if (_activePcIndex < 0 || _activePcIndex >= _placedItems.Count || _placedItems[_activePcIndex].Definition != ItemCatalog.Pc)
+        {
+            _interactionMessage = "PC NOT AVAILABLE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        string pokemonName = _storedPcPokemonNames[_selectedPcMenuIndex];
+        if (!TryFindNearbyOpenPokemonSpawnPosition(_placedItems[_activePcIndex].Bounds, out Vector2 spawnPosition))
+        {
+            _interactionMessage = "NO VALID SPOT AVAILABLE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(pokemonName);
+        _spawnedDittos.Add(new SpawnedPokemon(
+            _nextPokemonId++,
+            spawnDefinition.Name,
+            spawnPosition,
+            Direction.Down,
+            GetRandomMoveDelaySeconds(),
+            spawnDefinition.SkillLevels));
+        _storedPcPokemonNames.RemoveAt(_selectedPcMenuIndex);
+        _selectedPcMenuIndex = Math.Clamp(_selectedPcMenuIndex, 0, Math.Max(0, _storedPcPokemonNames.Count - 1));
+        _interactionMessage = $"{spawnDefinition.Name.ToUpperInvariant()} RELEASED";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private int GetPcMenuEntryCount()
+    {
+        return _activePcMenuScreen switch
+        {
+            PcMenuScreen.Quests => _activeQuests.Count,
+            PcMenuScreen.Storage => _storedPcPokemonNames.Count,
+            _ => 0
+        };
+    }
+
+    private void StoreFollowingPokemonInPc(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Pc)
+        {
+            return;
+        }
+
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            _talkState.SetText("POKEMON NOT FOUND");
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        if (!pokemon.IsFollowingPlayer)
+        {
+            _talkState.SetText("NOT FOLLOWING");
+            return;
+        }
+
+        _storedPcPokemonNames.Add(pokemon.Name);
+        _spawnedDittos.RemoveAt(pokemonIndex);
+
+        if (_talkTargetIndex >= _spawnedDittos.Count)
+        {
+            _talkTargetIndex = -1;
+        }
+
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} STORED");
+        if (_talkState.ActiveBuilding is not null)
+        {
+            _talkState.SetOptions(GetBuildingTalkOptions(_talkState.ActiveBuilding));
+        }
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} STORED IN PC";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private bool TryFindNearbyOpenPokemonSpawnPosition(Rectangle originBounds, out Vector2 spawnPosition)
+    {
+        Rectangle playableArea = new(
+            BorderThickness,
+            BorderThickness,
+            _worldBounds.Width - (BorderThickness * 2),
+            _worldBounds.Height - (BorderThickness * 2));
+
+        Point originCenter = originBounds.Center;
+        int[] radii = [0, PlayerSize, PlayerSize * 2, PlayerSize * 3, PlayerSize * 4];
+        foreach (int radius in radii)
+        {
+            foreach (Point offset in GetSpawnOffsets(radius))
+            {
+                Vector2 candidate = new(
+                    originCenter.X - (PlayerSize / 2f) + offset.X,
+                    originCenter.Y - (PlayerSize / 2f) + offset.Y);
+                Rectangle candidateBounds = new((int)candidate.X, (int)candidate.Y, PlayerSize, PlayerSize);
+
+                if (!playableArea.Contains(candidateBounds))
+                {
+                    continue;
+                }
+
+                if (CollidesWithPlacedItem(candidate) || CollidesWithSpawnedPokemon(candidateBounds, -1))
+                {
+                    continue;
+                }
+
+                spawnPosition = candidate;
+                return true;
+            }
+        }
+
+        spawnPosition = Vector2.Zero;
+        return false;
+    }
+
+    private static IEnumerable<Point> GetSpawnOffsets(int radius)
+    {
+        if (radius == 0)
+        {
+            yield return Point.Zero;
+            yield break;
+        }
+
+        yield return new Point(radius, 0);
+        yield return new Point(-radius, 0);
+        yield return new Point(0, radius);
+        yield return new Point(0, -radius);
+        yield return new Point(radius, radius);
+        yield return new Point(radius, -radius);
+        yield return new Point(-radius, radius);
+        yield return new Point(-radius, -radius);
+    }
+
+    private void OpenDungeonMenu()
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.DungeonPortal)
+        {
+            return;
+        }
+
+        _activeDungeonPortalIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        _inputMode = InputMode.DungeonMenu;
+        _selectedDungeonIndex = Math.Clamp(_selectedDungeonIndex, 0, Math.Max(0, _availableDungeons.Count - 1));
+        _talkExitTimer = 0f;
+    }
+
+    private void CloseDungeonMenu()
+    {
+        _inputMode = InputMode.Gameplay;
+        if (_activeDungeonRun is null)
+        {
+            _activeDungeonPortalIndex = -1;
+        }
+    }
+
+    private void UpdateDungeonMenuNavigation(bool moveUp, bool moveDown)
+    {
+        if (_availableDungeons.Count == 0)
+        {
+            _selectedDungeonIndex = 0;
+            return;
+        }
+
+        if (moveUp)
+        {
+            _selectedDungeonIndex = Math.Max(0, _selectedDungeonIndex - 1);
+        }
+
+        if (moveDown)
+        {
+            _selectedDungeonIndex = Math.Min(_availableDungeons.Count - 1, _selectedDungeonIndex + 1);
+        }
+    }
+
+    private void ConfirmDungeonMenuSelection()
+    {
+        if (_inputMode != InputMode.DungeonMenu ||
+            _selectedDungeonIndex < 0 ||
+            _selectedDungeonIndex >= _availableDungeons.Count)
+        {
+            return;
+        }
+
+        DungeonDefinition dungeonDefinition = _availableDungeons[_selectedDungeonIndex];
+        GeneratedDungeon generatedDungeon = DungeonGenerator.Generate(dungeonDefinition);
+        _generatedDungeonPreview = generatedDungeon;
+        EnterDungeonRun(generatedDungeon);
+        _interactionMessage = $"ENTERED {dungeonDefinition.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private void EnterDungeonRun(GeneratedDungeon dungeonRun)
+    {
+        _activeDungeonRun = dungeonRun;
+        _activeDungeonRoomIndex = 0;
+        _inputMode = InputMode.Gameplay;
+        _interactTarget = null;
+        _talkTargetIndex = -1;
+        _playerPosition = new Vector2(
+            _worldBounds.Center.X - (PlayerSize / 2f),
+            _worldBounds.Center.Y - (PlayerSize / 2f));
+    }
+
+    private void AdvanceDungeonRoomOrExit()
+    {
+        if (_activeDungeonRun is null)
+        {
+            return;
+        }
+
+        int nextRoomIndex = _activeDungeonRoomIndex + 1;
+        if (nextRoomIndex >= _activeDungeonRun.Rooms.Count)
+        {
+            LeaveActiveDungeonRun("LEFT");
+            return;
+        }
+
+        _activeDungeonRoomIndex = nextRoomIndex;
+        GeneratedDungeonRoom room = _activeDungeonRun.Rooms[_activeDungeonRoomIndex];
+        _interactionMessage = $"ROOM {_activeDungeonRoomIndex + 1}: {room.Definition.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    private void LeaveActiveDungeonRun(string messagePrefix)
+    {
+        if (_activeDungeonRun is null)
+        {
+            return;
+        }
+
+        string dungeonName = _activeDungeonRun.DungeonName;
+        _activeDungeonRun = null;
+        _activeDungeonRoomIndex = -1;
+        _inputMode = InputMode.Gameplay;
+        _interactTarget = null;
+        _talkTargetIndex = -1;
+        _playerPosition = GetDungeonPortalExitSpawnPosition();
+        _interactionMessage = $"{messagePrefix} {dungeonName.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+        _activeDungeonPortalIndex = -1;
+    }
+
+    private Vector2 GetDungeonPortalExitSpawnPosition()
+    {
+        PlacedItem? portal = null;
+        if (_activeDungeonPortalIndex >= 0 &&
+            _activeDungeonPortalIndex < _placedItems.Count &&
+            _placedItems[_activeDungeonPortalIndex].Definition == ItemCatalog.DungeonPortal)
+        {
+            portal = _placedItems[_activeDungeonPortalIndex];
+        }
+        else
+        {
+            portal = _placedItems.FirstOrDefault(item => item.Definition == ItemCatalog.DungeonPortal);
+        }
+
+        if (portal is null)
+        {
+            return new Vector2(
+                _worldBounds.Center.X - (PlayerSize / 2f),
+                _worldBounds.Center.Y - (PlayerSize / 2f));
+        }
+
+        Rectangle exitBounds = GetResourceBuildingExitBounds(portal);
+        if (!exitBounds.IsEmpty)
+        {
+            return new Vector2(exitBounds.X, exitBounds.Y);
+        }
+
+        return new Vector2(
+            portal.Bounds.Center.X - (PlayerSize / 2f),
+            portal.Bounds.Bottom + 4f);
     }
 }
