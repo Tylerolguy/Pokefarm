@@ -1,13 +1,9 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the PokemonDialogueService.
-/// </summary>
+// Static helper for pokemon Dialogue Service logic shared across the game loop.
 internal static class PokemonDialogueService
 {
-    /// <summary>
-    /// Executes the Get Opening Text operation.
-    /// </summary>
+    // Computes and returns opening Text without mutating persistent game state.
     public static string GetOpeningText(SpawnedPokemon pokemon)
     {
         if (!pokemon.IsClaimed && !pokemon.IsFollowingPlayer)
@@ -23,9 +19,7 @@ internal static class PokemonDialogueService
         return "HI!";
     }
 
-    /// <summary>
-    /// Executes the Get Options operation.
-    /// </summary>
+    // Computes and returns options without mutating persistent game state.
     public static List<PokemonDialogueOption> GetOptions(SpawnedPokemon pokemon)
     {
         if (!pokemon.IsClaimed && !pokemon.IsFollowingPlayer)

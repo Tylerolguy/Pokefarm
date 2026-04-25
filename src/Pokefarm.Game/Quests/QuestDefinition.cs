@@ -1,6 +1,4 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Quest Definition operation.
-/// </summary>
+// Data container used to pass quest Definition information between game systems.
 internal sealed record QuestDefinition(string Name);

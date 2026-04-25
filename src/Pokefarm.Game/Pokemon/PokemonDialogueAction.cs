@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for PokemonDialogueAction.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for pokemon Dialogue Action.
 internal enum PokemonDialogueAction
 {
     None,

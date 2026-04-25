@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for DungeonRoomType.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for dungeon Room Type.
 internal enum DungeonRoomType
 {
     Reward,

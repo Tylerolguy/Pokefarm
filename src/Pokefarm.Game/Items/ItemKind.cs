@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for ItemKind.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for item Kind.
 internal enum ItemKind
 {
     Building,

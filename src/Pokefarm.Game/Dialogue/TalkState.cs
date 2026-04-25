@@ -2,9 +2,7 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the TalkState.
-/// </summary>
+// Main runtime type for talk State, coordinating state and side effects for this feature.
 sealed class TalkState
 {
     public int ActivePokemonIndex { get; private set; } = -1;
@@ -16,9 +14,7 @@ sealed class TalkState
     public Texture2D? IconTexture { get; private set; }
     public string? IconName { get; private set; }
 
-    /// <summary>
-    /// Executes the Begin Pokemon Talk operation.
-    /// </summary>
+    // Enters pokemon Talk flow and initializes transient interaction state.
     public void BeginPokemonTalk(int pokemonIndex, string text, List<PokemonDialogueOption> options, string speakerName)
     {
         ActivePokemonIndex = pokemonIndex;
@@ -29,9 +25,7 @@ sealed class TalkState
         SpeakerName = speakerName;
     }
 
-    /// <summary>
-    /// Executes the Begin Building Talk operation.
-    /// </summary>
+    // Enters building Talk flow and initializes transient interaction state.
     public void BeginBuildingTalk(PlacedItem building, string text, List<PokemonDialogueOption> options, string speakerName)
     {
         ActivePokemonIndex = -1;
@@ -42,9 +36,7 @@ sealed class TalkState
         SpeakerName = speakerName;
     }
 
-    /// <summary>
-    /// Executes the Move Selection operation.
-    /// </summary>
+    // Moves selection while respecting collision and boundary rules.
     public void MoveSelection(int delta)
     {
         if (Options.Count == 0)
@@ -56,9 +48,7 @@ sealed class TalkState
         SelectedOptionIndex = Math.Clamp(SelectedOptionIndex + delta, 0, Options.Count - 1);
     }
 
-    /// <summary>
-    /// Executes the Get Selected Option operation.
-    /// </summary>
+    // Computes and returns selected Option without mutating persistent game state.
     public PokemonDialogueOption? GetSelectedOption()
     {
         if (SelectedOptionIndex < 0 || SelectedOptionIndex >= Options.Count)
@@ -69,43 +59,33 @@ sealed class TalkState
         return Options[SelectedOptionIndex];
     }
 
-    /// <summary>
-    /// Executes the Set Text operation.
-    /// </summary>
+    // Applies text and keeps connected state synchronized.
     public void SetText(string text)
     {
         Text = text;
     }
 
-    /// <summary>
-    /// Executes the Set Options operation.
-    /// </summary>
+    // Applies options and keeps connected state synchronized.
     public void SetOptions(List<PokemonDialogueOption> options)
     {
         Options = options;
         SelectedOptionIndex = Math.Clamp(SelectedOptionIndex, 0, Math.Max(0, options.Count - 1));
     }
 
-    /// <summary>
-    /// Executes the Set Icon operation.
-    /// </summary>
+    // Applies icon and keeps connected state synchronized.
     public void SetIcon(string iconName, Texture2D? iconTexture)
     {
         IconName = iconName;
         IconTexture = iconTexture;
     }
 
-    /// <summary>
-    /// Executes the Update Building Reference operation.
-    /// </summary>
+    // Ticks building Reference each frame and keeps related timers and state synchronized.
     public void UpdateBuildingReference(PlacedItem building)
     {
         ActiveBuilding = building;
     }
 
-    /// <summary>
-    /// Executes the Reset operation.
-    /// </summary>
+    // Handles reset for this gameplay subsystem.
     public void Reset()
     {
         ActivePokemonIndex = -1;

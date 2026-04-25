@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Pokemon Dialogue Option operation.
-/// </summary>
+// Data container used to pass pokemon Dialogue Option information between game systems.
 internal sealed record PokemonDialogueOption(
     string Label,
     PokemonDialogueAction Action,

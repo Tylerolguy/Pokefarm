@@ -2,9 +2,7 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Dungeon Obstacle Definition operation.
-/// </summary>
+// Data container used to pass dungeon Obstacle Definition information between game systems.
 internal sealed record DungeonObstacleDefinition(
     string Name,
     Point Position,

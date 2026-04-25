@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for CraftingSource.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for crafting Source.
 internal enum CraftingSource
 {
     HandheldCrafting,

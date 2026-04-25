@@ -3,30 +3,22 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Sprite Frame operation.
-/// </summary>
+// Data container used to pass sprite Frame information between game systems.
 internal sealed record SpriteFrame(Rectangle Source, int SourceWidth, int SourceHeight, int OffsetX, int OffsetY);
 
-/// <summary>
-/// Represents the SpriteAtlas.
-/// </summary>
+// Main runtime type for sprite Atlas, coordinating state and side effects for this feature.
 internal sealed class SpriteAtlas
 {
     public List<AtlasTexture>? Textures { get; set; }
 }
 
-/// <summary>
-/// Represents the AtlasTexture.
-/// </summary>
+// Main runtime type for atlas Texture, coordinating state and side effects for this feature.
 internal sealed class AtlasTexture
 {
     public List<AtlasFrame>? Frames { get; set; }
 }
 
-/// <summary>
-/// Represents the AtlasFrame.
-/// </summary>
+// Main runtime type for atlas Frame, coordinating state and side effects for this feature.
 internal sealed class AtlasFrame
 {
     public string? Filename { get; set; }
@@ -38,9 +30,7 @@ internal sealed class AtlasFrame
     public AtlasRect? SpriteSourceSize { get; set; }
 }
 
-/// <summary>
-/// Represents the AtlasRect.
-/// </summary>
+// Main runtime type for atlas Rect, coordinating state and side effects for this feature.
 internal sealed class AtlasRect
 {
     public int X { get; set; }
@@ -52,9 +42,7 @@ internal sealed class AtlasRect
     public int H { get; set; }
 }
 
-/// <summary>
-/// Represents the AtlasSize.
-/// </summary>
+// Main runtime type for atlas Size, coordinating state and side effects for this feature.
 internal sealed class AtlasSize
 {
     public int W { get; set; }

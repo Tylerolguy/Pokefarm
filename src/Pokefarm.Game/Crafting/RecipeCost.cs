@@ -1,6 +1,4 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Recipe Cost operation.
-/// </summary>
+// Represents one required ingredient entry in a recipe (item + quantity).
 internal sealed record RecipeCost(ItemDefinition Item, int Quantity);

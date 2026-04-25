@@ -3,9 +3,7 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Spawned Pokemon operation.
-/// </summary>
+// Data container used to pass spawned Pokemon information between game systems.
 internal sealed record SpawnedPokemon(
     int PokemonId,
     string Name,
@@ -29,9 +27,7 @@ internal sealed record SpawnedPokemon(
     int IdleAnimationFrame = 0,
     float IdleCyclePauseRemaining = 0f)
 {
-    /// <summary>
-    /// Executes the Get Skill Level operation.
-    /// </summary>
+    // Computes and returns skill Level without mutating persistent game state.
     public int GetSkillLevel(SkillType skillType)
     {
         if (skillType == SkillType.None || SkillLevels is null)

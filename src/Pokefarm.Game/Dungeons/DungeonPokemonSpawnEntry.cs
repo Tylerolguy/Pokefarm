@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Dungeon Pokemon Spawn Entry operation.
-/// </summary>
+// Data container used to pass dungeon Pokemon Spawn Entry information between game systems.
 internal sealed record DungeonPokemonSpawnEntry(
     string SpeciesName,
     int Weight,

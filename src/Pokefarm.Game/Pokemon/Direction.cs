@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for Direction.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for direction.
 internal enum Direction
 {
     Down,

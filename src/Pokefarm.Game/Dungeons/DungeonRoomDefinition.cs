@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Dungeon Room Definition operation.
-/// </summary>
+// Data container used to pass dungeon Room Definition information between game systems.
 internal sealed record DungeonRoomDefinition(
     string Name,
     DungeonRoomType Type,

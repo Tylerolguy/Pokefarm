@@ -1,21 +1,15 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the BuildingDialogueService.
-/// </summary>
+// Builds context-aware building dialogue text/options based on nearby Pokemon and current building state.
 internal static class BuildingDialogueService
 {
-    /// <summary>
-    /// Executes the Get Opening Text operation.
-    /// </summary>
+    // Generates the opening prompt shown when the player starts interacting with a building.
     public static string GetOpeningText(PlacedItem building)
     {
         return $"WHAT SHOULD I DO WITH THIS {building.Definition.Name.ToUpperInvariant()}";
     }
 
-    /// <summary>
-    /// Executes the Get Options operation.
-    /// </summary>
+    // Produces the full interaction menu for the active building, including assignment, collection, and navigation actions.
     public static List<PokemonDialogueOption> GetOptions(
         PlacedItem building,
         IReadOnlyList<SpawnedPokemon> spawnedPokemon,

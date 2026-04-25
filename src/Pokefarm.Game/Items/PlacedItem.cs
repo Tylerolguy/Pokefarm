@@ -2,9 +2,7 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Placed Item operation.
-/// </summary>
+// Data container used to pass placed Item information between game systems.
 internal sealed record PlacedItem(
     Rectangle Bounds,
     ItemDefinition Definition,
@@ -25,8 +23,6 @@ internal sealed record PlacedItem(
     float WorkbenchCraftEffortRemaining = 0f,
     float WorkbenchCraftEffortRequired = 0f)
 {
-    /// <summary>
-    /// Executes the Get Age Seconds operation.
-    /// </summary>
+    // Computes and returns age Seconds without mutating persistent game state.
     public double GetAgeSeconds(double currentWorldTimeSeconds) => Math.Max(0d, currentWorldTimeSeconds - PlacedAtWorldTimeSeconds);
 }

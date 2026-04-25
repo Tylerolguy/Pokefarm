@@ -2,9 +2,7 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Dungeon Spawn Point operation.
-/// </summary>
+// Data container used to pass dungeon Spawn Point information between game systems.
 internal sealed record DungeonSpawnPoint(
     DungeonSpawnPointType Type,
     Point Position);

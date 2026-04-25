@@ -3,14 +3,10 @@ using static Pokefarm.Game.BuildingWorkerHelpers;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the FarmGame.
-/// </summary>
+// Building interaction handlers used by talk menus to assign workers, manage crafting, and collect output.
 public sealed partial class FarmGame
 {
-    /// <summary>
-    /// Executes the Assign Pokemon To Active Workbench operation.
-    /// </summary>
+    // Assigns a crafting-capable Pokemon to the active workbench and refreshes talk state/feedback.
     private void AssignPokemonToActiveWorkbench(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -47,9 +43,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Unassign Pokemon From Active Workbench operation.
-    /// </summary>
+    // Removes the currently selected worker from the active workbench and updates dialogue options.
     private void UnassignPokemonFromActiveWorkbench(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -73,9 +67,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Dequeue Active Workbench Item operation.
-    /// </summary>
+    // Cancels the current workbench queue entry and refunds recipe costs back into inventory.
     private void DequeueActiveWorkbenchItem()
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -123,9 +115,7 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
-    /// <summary>
-    /// Executes the Collect Ready Workbench Item From Talk operation.
-    /// </summary>
+    // Collects a completed workbench item through the talk flow and refreshes the active panel.
     private void CollectReadyWorkbenchItemFromTalk()
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -152,9 +142,7 @@ public sealed partial class FarmGame
         _talkState.SetText("ITEM PICKED UP");
     }
 
-    /// <summary>
-    /// Executes the Is Workbench Within Pokemon Bed Range operation.
-    /// </summary>
+    // Prevents assigning workbench jobs to Pokemon whose home bed is outside their allowed work radius.
     private static bool IsWorkbenchWithinPokemonBedRange(SpawnedPokemon pokemon, PlacedItem workbench)
     {
         if (pokemon.HomePosition is not Vector2 homePosition)
@@ -168,9 +156,7 @@ public sealed partial class FarmGame
         return Vector2.DistanceSquared(homePosition, workbenchCenter) <= HomeWanderRadius * HomeWanderRadius;
     }
 
-    /// <summary>
-    /// Executes the Set Active Farm Plant operation.
-    /// </summary>
+    // Applies the selected crop to the active farm tile and resets growth/progress counters for the new plant.
     private void SetActiveFarmPlant(ItemDefinition plant)
     {
         if (_activeFarmIndex < 0 || _activeFarmIndex >= _placedItems.Count)
@@ -197,9 +183,7 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
-    /// <summary>
-    /// Executes the Assign Pokemon Home operation.
-    /// </summary>
+    // Sets a bed as a Pokemon's home, clearing follow/work movement so the Pokemon transitions to resident state.
     private void AssignPokemonHome(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Bed)
@@ -248,9 +232,7 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
-    /// <summary>
-    /// Executes the Assign Pokemon To Resource Building operation.
-    /// </summary>
+    // Assigns a Pokemon to a production building after validation and synchronizes both building and worker state.
     private void AssignPokemonToResourceBuilding(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
@@ -305,9 +287,7 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
-    /// <summary>
-    /// Executes the Unassign Pokemon From Active Resource Building operation.
-    /// </summary>
+    // Unassigns a worker from the active production building and safely resets worker runtime flags/position.
     private void UnassignPokemonFromActiveResourceBuilding(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
@@ -367,9 +347,7 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
-    /// <summary>
-    /// Executes the Collect Produced Materials From Active Building operation.
-    /// </summary>
+    // Transfers stored production from the active building into inventory, then clears the building's stored units.
     private void CollectProducedMaterialsFromActiveBuilding()
     {
         if (_talkState.ActiveBuilding is null)
@@ -407,9 +385,7 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
-    /// <summary>
-    /// Executes the Clear Existing Work Building For Pokemon operation.
-    /// </summary>
+    // Enforces one active job per Pokemon by removing prior work assignments before applying a new one.
     private void ClearExistingWorkBuildingForPokemon(int pokemonId)
     {
         for (int index = 0; index < _placedItems.Count; index++)
@@ -435,9 +411,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Can Assign Pokemon To Resource Building operation.
-    /// </summary>
+    // Central assignment gate: verifies skill, bed range, capacity, and pathing before allowing worker assignment.
     private bool CanAssignPokemonToResourceBuilding(SpawnedPokemon pokemon, PlacedItem building)
     {
         if (!building.Definition.IsResourceProduction)
@@ -485,9 +459,7 @@ public sealed partial class FarmGame
         return CanReachTargetAreaFromPosition(pokemon.Position, exitBounds, pokemonIndex);
     }
 
-    /// <summary>
-    /// Executes the Is Building Exit Within Pokemon Bed Range operation.
-    /// </summary>
+    // Uses the building exit point for range checks so workers can reliably travel between bed and job site.
     private static bool IsBuildingExitWithinPokemonBedRange(SpawnedPokemon pokemon, PlacedItem building)
     {
         if (pokemon.HomePosition is not Vector2 homePosition)
@@ -505,18 +477,14 @@ public sealed partial class FarmGame
         return Vector2.DistanceSquared(homePosition, exitCenter) <= HomeWanderRadius * HomeWanderRadius;
     }
 
-    /// <summary>
-    /// Executes the Pokemon Has Skill For Building operation.
-    /// </summary>
+    // Validates required skill rules; buildings with `SkillType.None` accept any Pokemon.
     private static bool PokemonHasSkillForBuilding(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
     {
         SkillType requiredSkill = buildingDefinition.RequiredSkill;
         return requiredSkill == SkillType.None || pokemon.GetSkillLevel(requiredSkill) > 0;
     }
 
-    /// <summary>
-    /// Executes the Get Produced Material For Building operation.
-    /// </summary>
+    // Resolves what item a building should output, including farm-specific crop overrides.
     private static ItemDefinition? GetProducedMaterialForBuilding(PlacedItem building)
     {
         if (!building.Definition.IsResourceProduction)

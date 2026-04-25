@@ -5,14 +5,10 @@ using static Pokefarm.Game.WorkbenchCraftingHelpers;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the FarmGame.
-/// </summary>
+// Main runtime type for farm Game, coordinating state and side effects for this feature.
 public sealed partial class FarmGame
 {
-    /// <summary>
-    /// Executes the Draw Farm operation.
-    /// </summary>
+    // Draws farm for the current frame using the active render context.
     private void DrawFarm()
     {
         if (_spriteBatch is null || _pixel is null)
@@ -40,9 +36,7 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(_pixel, new Rectangle(_worldBounds.Width - BorderThickness, 0, BorderThickness, _worldBounds.Height), boundary);
     }
 
-    /// <summary>
-    /// Executes the Draw Active Dungeon Room operation.
-    /// </summary>
+    // Draws active Dungeon Room for the current frame using the active render context.
     private void DrawActiveDungeonRoom()
     {
         if (_spriteBatch is null || _pixel is null || _activeDungeonRun is null)
@@ -152,9 +146,7 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(_pixel, new Rectangle(_worldBounds.Width - BorderThickness, 0, BorderThickness, _worldBounds.Height), wallColor);
     }
 
-    /// <summary>
-    /// Executes the Draw Dungeon Spawn Markers operation.
-    /// </summary>
+    // Draws dungeon Spawn Markers for the current frame using the active render context.
     private void DrawDungeonSpawnMarkers(DungeonRoomTemplate template, int roomStartX, int roomStartY, int tileRenderSize)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -185,9 +177,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Placed Items operation.
-    /// </summary>
+    // Draws placed Items for the current frame using the active render context.
     private void DrawPlacedItems()
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null)
@@ -226,9 +216,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Resource Exit Marker operation.
-    /// </summary>
+    // Draws resource Exit Marker for the current frame using the active render context.
     private void DrawResourceExitMarker(PlacedItem building)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -247,9 +235,7 @@ public sealed partial class FarmGame
         DrawPixelText("EXIT", new Vector2(exitBounds.X + 4, exitBounds.Y + 6), new Color(236, 220, 196));
     }
 
-    /// <summary>
-    /// Executes the Draw Production Progress Circle operation.
-    /// </summary>
+    // Draws production Progress Circle for the current frame using the active render context.
     private void DrawProductionProgressCircle(PlacedItem building)
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null)
@@ -270,9 +256,7 @@ public sealed partial class FarmGame
         DrawProgressCircleAtBuildingCenter(building, progress, fillColor);
     }
 
-    /// <summary>
-    /// Executes the Draw Workbench Crafting Progress Circle operation.
-    /// </summary>
+    // Draws workbench Crafting Progress Circle for the current frame using the active render context.
     private void DrawWorkbenchCraftingProgressCircle(PlacedItem workbench)
     {
         if (workbench.WorkbenchQueuedItem is null || workbench.WorkbenchCraftEffortRequired <= 0f)
@@ -285,9 +269,7 @@ public sealed partial class FarmGame
         DrawProgressCircleAtBuildingCenter(workbench, progress, new Color(91, 188, 110, 235));
     }
 
-    /// <summary>
-    /// Executes the Draw Progress Circle At Building Center operation.
-    /// </summary>
+    // Draws progress Circle At Building Center for the current frame using the active render context.
     private void DrawProgressCircleAtBuildingCenter(PlacedItem building, float progress, Color fillColor)
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null)
@@ -328,9 +310,7 @@ public sealed partial class FarmGame
         DrawPanelBorder(circleBounds, new Color(181, 138, 95));
     }
 
-    /// <summary>
-    /// Executes the Get Production Progress Fill Color operation.
-    /// </summary>
+    // Computes and returns production Progress Fill Color without mutating persistent game state.
     private static Color GetProductionProgressFillColor(PlacedItem building)
     {
         if (building.Definition == ItemCatalog.Farm)
@@ -353,9 +333,7 @@ public sealed partial class FarmGame
         };
     }
 
-    /// <summary>
-    /// Executes the Draw Building Worker Icons operation.
-    /// </summary>
+    // Draws building Worker Icons for the current frame using the active render context.
     private void DrawBuildingWorkerIcons(PlacedItem building)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -390,9 +368,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Placement Preview operation.
-    /// </summary>
+    // Draws placement Preview for the current frame using the active render context.
     private void DrawPlacementPreview()
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null || _previewItem is null)
@@ -411,9 +387,7 @@ public sealed partial class FarmGame
         DrawPanelBorder(_previewItem.Bounds, _previewPlacementValid ? new Color(255, 245, 180) : new Color(180, 70, 70));
     }
 
-    /// <summary>
-    /// Executes the Draw Spawned Dittos operation.
-    /// </summary>
+    // Draws spawned Dittos for the current frame using the active render context.
     private void DrawSpawnedDittos()
     {
         if (_spriteBatch is null)
@@ -439,9 +413,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Status Marker operation.
-    /// </summary>
+    // Draws status Marker for the current frame using the active render context.
     private void DrawStatusMarker(SpawnedPokemon pokemon)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -468,9 +440,7 @@ public sealed partial class FarmGame
         DrawPixelText("!", new Vector2(panel.X + 5, panel.Y + 3), UnclaimedMarkerText);
     }
 
-    /// <summary>
-    /// Executes the Draw Removal Preview operation.
-    /// </summary>
+    // Draws removal Preview for the current frame using the active render context.
     private void DrawRemovalPreview()
     {
         if (_spriteBatch is null || _pixel is null || _inputMode != InputMode.Removal)
@@ -494,9 +464,7 @@ public sealed partial class FarmGame
         DrawPanelBorder(_removeTarget.Bounds, Color.Gold);
     }
 
-    /// <summary>
-    /// Executes the Draw Inventory Screen operation.
-    /// </summary>
+    // Draws inventory Screen for the current frame using the active render context.
     private void DrawInventoryScreen()
     {
         if (_spriteBatch is null || _pixel is null || _circleTexture is null)
@@ -565,9 +533,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Crafting Screen operation.
-    /// </summary>
+    // Draws crafting Screen for the current frame using the active render context.
     private void DrawCraftingScreen()
     {
         if (_spriteBatch is null || _pixel is null)
@@ -675,9 +641,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Pc Menu Screen operation.
-    /// </summary>
+    // Draws pc Menu Screen for the current frame using the active render context.
     private void DrawPcMenuScreen()
     {
         if (_spriteBatch is null || _pixel is null)
@@ -782,9 +746,7 @@ public sealed partial class FarmGame
         DrawPixelText(footerText, new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
     }
 
-    /// <summary>
-    /// Executes the Get Pc Menu Theme operation.
-    /// </summary>
+    // Computes and returns pc Menu Theme without mutating persistent game state.
     private static void GetPcMenuTheme(
         PcMenuScreen screen,
         out Color overlayTint,
@@ -819,9 +781,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Get Pc Menu Title operation.
-    /// </summary>
+    // Computes and returns pc Menu Title without mutating persistent game state.
     private string GetPcMenuTitle()
     {
         return _activePcMenuScreen switch
@@ -833,9 +793,7 @@ public sealed partial class FarmGame
         };
     }
 
-    /// <summary>
-    /// Executes the Get Pc Menu Entries operation.
-    /// </summary>
+    // Computes and returns pc Menu Entries without mutating persistent game state.
     private List<string> GetPcMenuEntries()
     {
         if (_activePcMenuScreen == PcMenuScreen.Quests)
@@ -851,9 +809,7 @@ public sealed partial class FarmGame
         return [];
     }
 
-    /// <summary>
-    /// Executes the Draw Dungeon Menu Screen operation.
-    /// </summary>
+    // Draws dungeon Menu Screen for the current frame using the active render context.
     private void DrawDungeonMenuScreen()
     {
         if (_spriteBatch is null || _pixel is null)
@@ -913,9 +869,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Panel Border operation.
-    /// </summary>
+    // Draws panel Border for the current frame using the active render context.
     private void DrawPanelBorder(Rectangle rectangle, Color color)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -929,9 +883,7 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(_pixel, new Rectangle(rectangle.Right - 2, rectangle.Y, 2, rectangle.Height), color);
     }
 
-    /// <summary>
-    /// Executes the Draw Pixel Text operation.
-    /// </summary>
+    // Draws pixel Text for the current frame using the active render context.
     private void DrawPixelText(string text, Vector2 position, Color color, int pixelSize = UiFontPixelSize, int spacing = UiFontSpacing)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -975,9 +927,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Measure Pixel Text operation.
-    /// </summary>
+    // Measures pixel Text for layout decisions before rendering.
     private Point MeasurePixelText(string text, int pixelSize = UiFontPixelSize, int spacing = UiFontSpacing)
     {
         int width = 0;
@@ -1003,9 +953,7 @@ public sealed partial class FarmGame
         return new Point(width, maxHeight);
     }
 
-    /// <summary>
-    /// Executes the Draw Player operation.
-    /// </summary>
+    // Draws player for the current frame using the active render context.
     private void DrawPlayer()
     {
         bool isWalking = _playerMovement != Vector2.Zero;
@@ -1015,9 +963,7 @@ public sealed partial class FarmGame
         DrawPokemonAt(_playerPosition, PlayerPokemonName, _playerDirection, isWalking, _walkAnimationFrame, idleFrame);
     }
 
-    /// <summary>
-    /// Executes the Draw Pokemon At operation.
-    /// </summary>
+    // Draws pokemon At for the current frame using the active render context.
     private void DrawPokemonAt(
         Vector2 topLeftPosition,
         string pokemonName,
@@ -1073,9 +1019,7 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(spriteSheet, destination, frame.Source, Color.White);
     }
 
-    /// <summary>
-    /// Executes the Draw Interaction Overlay operation.
-    /// </summary>
+    // Draws interaction Overlay for the current frame using the active render context.
     private void DrawInteractionOverlay()
     {
         if (_spriteBatch is null || _pixel is null)
@@ -1123,9 +1067,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Get Active Dungeon Room operation.
-    /// </summary>
+    // Computes and returns active Dungeon Room without mutating persistent game state.
     private GeneratedDungeonRoom? GetActiveDungeonRoom()
     {
         if (_activeDungeonRun is null ||
@@ -1138,9 +1080,7 @@ public sealed partial class FarmGame
         return _activeDungeonRun.Rooms[_activeDungeonRoomIndex];
     }
 
-    /// <summary>
-    /// Executes the Draw Talk Screen operation.
-    /// </summary>
+    // Draws talk Screen for the current frame using the active render context.
     private void DrawTalkScreen()
     {
         if (_spriteBatch is null || _pixel is null)
@@ -1216,9 +1156,7 @@ public sealed partial class FarmGame
         }
     }
 
-    /// <summary>
-    /// Executes the Draw Prompt Panel operation.
-    /// </summary>
+    // Draws prompt Panel for the current frame using the active render context.
     private void DrawPromptPanel(string text, Point center)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -1238,9 +1176,7 @@ public sealed partial class FarmGame
         DrawPixelText(text, new Vector2(panel.X + 12, panel.Y + 8), new Color(236, 220, 196));
     }
 
-    /// <summary>
-    /// Executes the Draw Triangle Indicator operation.
-    /// </summary>
+    // Draws triangle Indicator for the current frame using the active render context.
     private void DrawTriangleIndicator(Point center, bool pointUp, Color color)
     {
         if (_spriteBatch is null || _pixel is null)

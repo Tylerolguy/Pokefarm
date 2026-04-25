@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the SnackSpawnCatalog.
-/// </summary>
+// Static helper for snack Spawn Catalog logic shared across the game loop.
 internal static class SnackSpawnCatalog
 {
     private static readonly Dictionary<ItemDefinition, IReadOnlyList<WeightedPokemonSpawn>> SpawnBuckets = new()
@@ -37,9 +35,7 @@ internal static class SnackSpawnCatalog
         
     };
 
-    /// <summary>
-    /// Executes the Roll Spawn Name operation.
-    /// </summary>
+    // Handles roll Spawn Name for this gameplay subsystem.
     public static string RollSpawnName(ItemDefinition snackDefinition)
     {
         if (!SpawnBuckets.TryGetValue(snackDefinition, out IReadOnlyList<WeightedPokemonSpawn>? bucket) || bucket.Count == 0)
@@ -73,4 +69,5 @@ internal static class SnackSpawnCatalog
     }
 }
 
+// Value-type data container for weighted Pokemon Spawn used in hot gameplay paths.
 internal readonly record struct WeightedPokemonSpawn(string PokemonName, float Weight);

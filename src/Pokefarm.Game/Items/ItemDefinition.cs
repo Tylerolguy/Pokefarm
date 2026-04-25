@@ -2,9 +2,7 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Item Definition operation.
-/// </summary>
+// Data container used to pass item Definition information between game systems.
 internal sealed record ItemDefinition(
     string Name,
     Color Tint,

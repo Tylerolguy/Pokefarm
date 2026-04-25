@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for PcMenuScreen.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for pc Menu Screen.
 internal enum PcMenuScreen
 {
     Quests,

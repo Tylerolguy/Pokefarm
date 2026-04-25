@@ -2,14 +2,10 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the BuildingWorkerHelpers.
-/// </summary>
+// Static helper for building Worker Helpers logic shared across the game loop.
 internal static class BuildingWorkerHelpers
 {
-    /// <summary>
-    /// Executes the Get Resource Building Exit Bounds operation.
-    /// </summary>
+    // Computes and returns resource Building Exit Bounds without mutating persistent game state.
     public static Rectangle GetResourceBuildingExitBounds(PlacedItem building)
     {
         if (!building.Definition.IsBuildingLike || building.Definition.ExitSize.X <= 0 || building.Definition.ExitSize.Y <= 0)
@@ -25,9 +21,7 @@ internal static class BuildingWorkerHelpers
             size.Y);
     }
 
-    /// <summary>
-    /// Executes the Get Worker Respawn Position operation.
-    /// </summary>
+    // Computes and returns worker Respawn Position without mutating persistent game state.
     public static Vector2 GetWorkerRespawnPosition(PlacedItem building, int playerSize = 32)
     {
         Rectangle exitBounds = GetResourceBuildingExitBounds(building);
@@ -41,9 +35,7 @@ internal static class BuildingWorkerHelpers
             building.Bounds.Bottom + 4f);
     }
 
-    /// <summary>
-    /// Executes the Get Pokemon Effort Per Second operation.
-    /// </summary>
+    // Computes and returns pokemon Effort Per Second without mutating persistent game state.
     public static float GetPokemonEffortPerSecond(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
     {
         SkillType requiredSkill = buildingDefinition.RequiredSkill;
@@ -61,9 +53,7 @@ internal static class BuildingWorkerHelpers
         return skillLevel;
     }
 
-    /// <summary>
-    /// Executes the Get Worker Pokemon Ids operation.
-    /// </summary>
+    // Computes and returns worker Pokemon Ids without mutating persistent game state.
     public static List<int> GetWorkerPokemonIds(PlacedItem building)
     {
         List<int> workerIds = [];
@@ -85,9 +75,7 @@ internal static class BuildingWorkerHelpers
         return workerIds;
     }
 
-    /// <summary>
-    /// Executes the Get Worker Pokemon Names operation.
-    /// </summary>
+    // Computes and returns worker Pokemon Names without mutating persistent game state.
     public static List<string> GetWorkerPokemonNames(PlacedItem building)
     {
         List<string> workerNames = [];
@@ -109,9 +97,7 @@ internal static class BuildingWorkerHelpers
         return workerNames;
     }
 
-    /// <summary>
-    /// Executes the Has Worker operation.
-    /// </summary>
+    // Checks whether worker is currently true for the active world state.
     public static bool HasWorker(PlacedItem building, int pokemonId)
     {
         return building.WorkerPokemonId == pokemonId ||
@@ -119,9 +105,7 @@ internal static class BuildingWorkerHelpers
                building.WorkerPokemonId3 == pokemonId;
     }
 
-    /// <summary>
-    /// Executes the Add Worker To Building operation.
-    /// </summary>
+    // Adds worker To Building and updates related collections/counters to stay consistent.
     public static PlacedItem AddWorkerToBuilding(PlacedItem building, SpawnedPokemon pokemon)
     {
         if (!building.WorkerPokemonId.HasValue)
@@ -142,9 +126,7 @@ internal static class BuildingWorkerHelpers
         return building;
     }
 
-    /// <summary>
-    /// Executes the Remove Worker From Building operation.
-    /// </summary>
+    // Removes worker From Building and reconciles dependent state.
     public static PlacedItem RemoveWorkerFromBuilding(PlacedItem building, int pokemonId)
     {
         if (building.WorkerPokemonId == pokemonId)
@@ -165,9 +147,7 @@ internal static class BuildingWorkerHelpers
         return building;
     }
 
-    /// <summary>
-    /// Executes the Get Production Step Label operation.
-    /// </summary>
+    // Computes and returns production Step Label without mutating persistent game state.
     public static string GetProductionStepLabel(PlacedItem building)
     {
         if (building.Definition == ItemCatalog.Farm)

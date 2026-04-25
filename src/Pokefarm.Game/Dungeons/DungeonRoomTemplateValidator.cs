@@ -2,14 +2,10 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the DungeonRoomTemplateValidator.
-/// </summary>
+// Static helper for dungeon Room Template Validator logic shared across the game loop.
 internal static class DungeonRoomTemplateValidator
 {
-    /// <summary>
-    /// Executes the Is Valid operation.
-    /// </summary>
+    // Checks whether valid is currently true for the active world state.
     public static bool IsValid(DungeonRoomTemplate template, out string reason)
     {
         if (template.Size.X <= 0 || template.Size.Y <= 0)
@@ -81,17 +77,13 @@ internal static class DungeonRoomTemplateValidator
         return true;
     }
 
-    /// <summary>
-    /// Executes the Is Inside operation.
-    /// </summary>
+    // Checks whether inside is currently true for the active world state.
     private static bool IsInside(Point point, Point size)
     {
         return point.X >= 0 && point.Y >= 0 && point.X < size.X && point.Y < size.Y;
     }
 
-    /// <summary>
-    /// Executes the Is Walkable Layout Cell operation.
-    /// </summary>
+    // Checks whether walkable Layout Cell is currently true for the active world state.
     private static bool IsWalkableLayoutCell(DungeonRoomTemplate template, Point point)
     {
         char tile = template.LayoutRows[point.Y][point.X];

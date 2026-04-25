@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for InputMode.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for input Mode.
 internal enum InputMode
 {
     Gameplay,

@@ -1,15 +1,11 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Executes the Spawned Pokemon Definition operation.
-/// </summary>
+// Data container used to pass spawned Pokemon Definition information between game systems.
 internal sealed record SpawnedPokemonDefinition(
     string Name,
     IReadOnlyDictionary<SkillType, int> SkillLevels);
 
-/// <summary>
-/// Represents the SpawnedPokemonCatalog.
-/// </summary>
+// Static helper for spawned Pokemon Catalog logic shared across the game loop.
 internal static class SpawnedPokemonCatalog
 {
     private static readonly IReadOnlyDictionary<SkillType, int> NoSkills = new Dictionary<SkillType, int>();
@@ -40,9 +36,7 @@ internal static class SpawnedPokemonCatalog
         ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1)))
     };
 
-    /// <summary>
-    /// Executes the Get Or Default operation.
-    /// </summary>
+    // Computes and returns or Default without mutating persistent game state.
     public static SpawnedPokemonDefinition GetOrDefault(string pokemonName)
     {
         if (Entries.TryGetValue(pokemonName, out SpawnedPokemonDefinition? definition))

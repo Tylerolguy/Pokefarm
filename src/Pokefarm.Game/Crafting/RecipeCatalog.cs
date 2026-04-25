@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the RecipeCatalog.
-/// </summary>
+// Static helper for recipe Catalog logic shared across the game loop.
 internal static class RecipeCatalog
 {
     public static readonly RecipeDefinition WorkBench = new(

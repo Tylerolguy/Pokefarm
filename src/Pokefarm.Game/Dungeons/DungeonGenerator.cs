@@ -1,13 +1,9 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the DungeonGenerator.
-/// </summary>
+// Static helper for dungeon Generator logic shared across the game loop.
 internal static class DungeonGenerator
 {
-    /// <summary>
-    /// Executes the Generate operation.
-    /// </summary>
+    // Builds generate from current inputs for downstream gameplay logic.
     public static GeneratedDungeon Generate(DungeonDefinition definition)
     {
         if (definition.RoomPool.Count == 0)
@@ -52,9 +48,7 @@ internal static class DungeonGenerator
         return new GeneratedDungeon(definition.Name, rooms);
     }
 
-    /// <summary>
-    /// Executes the Pick Weighted Room operation.
-    /// </summary>
+    // Handles pick Weighted Room for this gameplay subsystem.
     private static DungeonRoomDefinition PickWeightedRoom(IReadOnlyList<DungeonRoomDefinition> rooms)
     {
         int totalWeight = 0;

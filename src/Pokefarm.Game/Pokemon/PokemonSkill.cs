@@ -1,8 +1,6 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Defines possible values for SkillType.
-/// </summary>
+// Named options used by gameplay flow to branch behavior for skill Type.
 internal enum SkillType
 {
     None = 0,

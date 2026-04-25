@@ -1,13 +1,9 @@
 namespace Pokefarm.Game;
 
-/// <summary>
-/// Represents the WorkbenchCraftingHelpers.
-/// </summary>
+// Workbench-specific helper rules used by talk, crafting, and rendering paths.
 internal static class WorkbenchCraftingHelpers
 {
-    /// <summary>
-    /// Executes the Is Workbench Item Ready operation.
-    /// </summary>
+    // A workbench item is ready only when a queue exists and the required effort has fully elapsed.
     public static bool IsWorkbenchItemReady(PlacedItem workbench)
     {
         return workbench.Definition == ItemCatalog.WorkBench &&
@@ -15,9 +11,7 @@ internal static class WorkbenchCraftingHelpers
                workbench.WorkbenchCraftEffortRemaining <= 0f;
     }
 
-    /// <summary>
-    /// Executes the Get Workbench Queue Capacity operation.
-    /// </summary>
+    // Single place for queue capacity so per-workbench upgrades can be introduced without changing callers.
     public static int GetWorkbenchQueueCapacity(PlacedItem workbench)
     {
         _ = workbench;
@@ -25,9 +19,7 @@ internal static class WorkbenchCraftingHelpers
         return 1;
     }
 
-    /// <summary>
-    /// Executes the Get Workbench Queued Item Count operation.
-    /// </summary>
+    // Current queue count helper that keeps callers decoupled from the underlying queue representation.
     public static int GetWorkbenchQueuedItemCount(PlacedItem workbench)
     {
         return workbench.WorkbenchQueuedItem is null ? 0 : 1;
