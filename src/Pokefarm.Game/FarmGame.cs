@@ -855,7 +855,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
             bool hasJob = assignedBuildingIndex >= 0;
-            bool jobHasWork = hasJob && HasAvailableProductionWork(_placedItems[assignedBuildingIndex]);
+            bool jobHasWork = hasJob && HasAvailableProductionWorkForPokemon(pokemon, _placedItems[assignedBuildingIndex]);
             bool workPathBlocked = false;
 
             if (jobHasWork)
@@ -1151,6 +1151,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             float effortPerSecond = 0f;
+            SkillType? activeFarmStageSkill = building.Definition == ItemCatalog.Farm
+                ? GetFarmStageSkill(building.ProductionStepIndex)
+                : null;
             foreach (int workerId in workerIds)
             {
                 SpawnedPokemon? worker = _spawnedDittos.FirstOrDefault(pokemon => pokemon.PokemonId == workerId);
@@ -1159,7 +1162,14 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                     continue;
                 }
 
-                effortPerSecond += GetPokemonEffortPerSecond(worker, building.Definition);
+                if (activeFarmStageSkill.HasValue)
+                {
+                    effortPerSecond += Math.Max(0, worker.GetSkillLevel(activeFarmStageSkill.Value));
+                }
+                else
+                {
+                    effortPerSecond += GetPokemonEffortPerSecond(worker, building.Definition);
+                }
             }
 
             if (effortPerSecond <= 0f)
@@ -1274,8 +1284,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
 
             PlacedItem building = _placedItems[assignedBuildingIndex];
-            bool buildingHasWork = HasAvailableProductionWork(building);
-            if (buildingHasWork)
+            bool pokemonHasWork = HasAvailableProductionWorkForPokemon(pokemon, building);
+            if (pokemonHasWork)
             {
                 _spawnedDittos[pokemonIndex] = pokemon with
                 {
@@ -1288,7 +1298,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             {
                 _spawnedDittos[pokemonIndex] = pokemon with
                 {
-                    IsAssignedToWork = true
+                    IsAssignedToWork = false,
+                    ShowWorkBlockedMarker = false
                 };
                 continue;
             }
@@ -1296,7 +1307,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             Vector2 idlePosition = GetWorkerRespawnPosition(building);
             _spawnedDittos[pokemonIndex] = pokemon with
             {
-                IsAssignedToWork = true,
+                IsAssignedToWork = false,
                 IsWorking = false,
                 IsFollowingPlayer = false,
                 IsMoving = false,
@@ -1332,6 +1343,23 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return building.Definition.IsResourceProduction &&
                producedMaterial is not null &&
                building.StoredProducedUnits < building.Definition.MaxStoredProducedUnits;
+    }
+
+    // Checks whether available Production Work For Pokemon is currently true for the active world state.
+    private static bool HasAvailableProductionWorkForPokemon(SpawnedPokemon pokemon, PlacedItem building)
+    {
+        if (!HasAvailableProductionWork(building))
+        {
+            return false;
+        }
+
+        if (building.Definition != ItemCatalog.Farm)
+        {
+            return true;
+        }
+
+        SkillType stageSkill = GetFarmStageSkill(building.ProductionStepIndex);
+        return pokemon.GetSkillLevel(stageSkill) > 0;
     }
 
     // Attempts to pick Random Wander Target In Home Range and reports success so callers can handle failure without exceptions.
@@ -1736,6 +1764,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         return candidateDistanceSquared > radiusSquared;
+    }
+
+    // Computes and returns farm Stage Skill without mutating persistent game state.
+    private static SkillType GetFarmStageSkill(int productionStepIndex)
+    {
+        return Math.Clamp(productionStepIndex, 0, 2) switch
+        {
+            0 => SkillType.Planting,
+            1 => SkillType.Water,
+            _ => SkillType.Harvesting
+        };
     }
 
     // Computes and returns home Range Target Area without mutating persistent game state.

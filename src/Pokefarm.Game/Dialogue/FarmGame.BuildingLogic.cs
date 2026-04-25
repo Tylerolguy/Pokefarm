@@ -329,7 +329,7 @@ public sealed partial class FarmGame
         _talkState.UpdateBuildingReference(_placedItems[buildingIndex]);
         _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[buildingIndex]));
 
-        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} STARTS LUMBER WORK");
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} WILL WORK AT {building.Definition.Name.ToUpperInvariant()}");
         _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} ASSIGNED TO {building.Definition.Name.ToUpperInvariant()}";
         _interactionMessageTimer = InteractionMessageDuration;
         return true;
@@ -485,10 +485,26 @@ public sealed partial class FarmGame
             return ResourceAssignmentFailureReason.BedTooFar;
         }
 
-        SkillType requiredSkill = building.Definition.RequiredSkill;
         int requiredSkillLevel = Math.Max(1, building.Definition.RequiredSkillLevel);
-        if (requiredSkill != SkillType.None)
+        if (building.Definition == ItemCatalog.Farm)
         {
+            int plantingLevel = pokemon.GetSkillLevel(SkillType.Planting);
+            int wateringLevel = pokemon.GetSkillLevel(SkillType.Water);
+            int harvestingLevel = pokemon.GetSkillLevel(SkillType.Harvesting);
+            int bestFarmSkillLevel = Math.Max(plantingLevel, Math.Max(wateringLevel, harvestingLevel));
+            if (bestFarmSkillLevel <= 0)
+            {
+                return ResourceAssignmentFailureReason.SkillMismatch;
+            }
+
+            if (bestFarmSkillLevel < requiredSkillLevel)
+            {
+                return ResourceAssignmentFailureReason.SkillTooLow;
+            }
+        }
+        else if (building.Definition.RequiredSkill != SkillType.None)
+        {
+            SkillType requiredSkill = building.Definition.RequiredSkill;
             int pokemonSkillLevel = pokemon.GetSkillLevel(requiredSkill);
             if (pokemonSkillLevel <= 0)
             {
@@ -546,8 +562,33 @@ public sealed partial class FarmGame
             return false;
         }
 
-        Vector2 exitCenter = new(exitBounds.Center.X - (PlayerSize / 2f), exitBounds.Center.Y - (PlayerSize / 2f));
-        return Vector2.DistanceSquared(homePosition, exitCenter) <= HomeWanderRadius * HomeWanderRadius;
+        return HasMinimumBedRangeCoverage(homePosition, exitBounds);
+    }
+
+    // Checks whether at least one tenth of exit-space pixels can be considered inside bed range.
+    private static bool HasMinimumBedRangeCoverage(Vector2 homePosition, Rectangle exitBounds)
+    {
+        int totalPixels = exitBounds.Width * exitBounds.Height;
+        if (totalPixels <= 0)
+        {
+            return false;
+        }
+
+        float radiusSquared = HomeWanderRadius * HomeWanderRadius;
+        int insidePixels = 0;
+        for (int y = exitBounds.Top; y < exitBounds.Bottom; y++)
+        {
+            for (int x = exitBounds.Left; x < exitBounds.Right; x++)
+            {
+                Vector2 candidateTopLeft = new(x - (PlayerSize / 2f), y - (PlayerSize / 2f));
+                if (Vector2.DistanceSquared(homePosition, candidateTopLeft) <= radiusSquared)
+                {
+                    insidePixels++;
+                }
+            }
+        }
+
+        return insidePixels * 10 >= totalPixels;
     }
 
     // Resolves what item a building should output, including farm-specific crop overrides.

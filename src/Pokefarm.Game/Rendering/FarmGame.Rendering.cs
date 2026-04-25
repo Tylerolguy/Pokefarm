@@ -224,14 +224,20 @@ public sealed partial class FarmGame
     // Draws bed Home Range for the current frame using the active render context.
     private void DrawBedHomeRange(PlacedItem bed)
     {
-        if (_spriteBatch is null || _pixel is null)
+        if (_spriteBatch is null || _circleTexture is null)
         {
             return;
         }
 
-        Vector2 homePosition = GetBedHomePosition(bed);
-        Rectangle rangeBounds = GetHomeRangeTargetArea(homePosition);
-        _spriteBatch.Draw(_pixel, rangeBounds, new Color(84, 166, 255, 46));
+        int radius = (int)MathF.Ceiling(HomeWanderRadius);
+        int diameter = radius * 2;
+        Rectangle rangeBounds = new(
+            bed.Bounds.Center.X - radius,
+            bed.Bounds.Center.Y - radius,
+            diameter,
+            diameter);
+
+        _spriteBatch.Draw(_circleTexture, rangeBounds, new Color(84, 166, 255, 46));
         DrawPanelBorder(rangeBounds, new Color(84, 166, 255, 168));
     }
 
