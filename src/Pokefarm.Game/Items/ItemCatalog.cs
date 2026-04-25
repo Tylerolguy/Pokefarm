@@ -2,6 +2,9 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the ItemCatalog.
+/// </summary>
 internal static class ItemCatalog
 {
     public static readonly ItemDefinition Wood = new("Wood", new Color(161, 116, 67), ItemKind.Material, false, new Point(32, 32));

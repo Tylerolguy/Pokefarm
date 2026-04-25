@@ -1,5 +1,8 @@
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Defines possible values for DungeonSpawnPointType.
+/// </summary>
 internal enum DungeonSpawnPointType
 {
     PlayerStart,

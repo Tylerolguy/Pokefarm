@@ -1,12 +1,21 @@
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the BuildingDialogueService.
+/// </summary>
 internal static class BuildingDialogueService
 {
+    /// <summary>
+    /// Executes the Get Opening Text operation.
+    /// </summary>
     public static string GetOpeningText(PlacedItem building)
     {
         return $"WHAT SHOULD I DO WITH THIS {building.Definition.Name.ToUpperInvariant()}";
     }
 
+    /// <summary>
+    /// Executes the Get Options operation.
+    /// </summary>
     public static List<PokemonDialogueOption> GetOptions(
         PlacedItem building,
         IReadOnlyList<SpawnedPokemon> spawnedPokemon,

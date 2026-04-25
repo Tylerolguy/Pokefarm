@@ -1,5 +1,8 @@
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Defines possible values for PokemonDialogueAction.
+/// </summary>
 internal enum PokemonDialogueAction
 {
     None,

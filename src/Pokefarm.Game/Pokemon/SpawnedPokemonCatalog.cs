@@ -1,9 +1,15 @@
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Executes the Spawned Pokemon Definition operation.
+/// </summary>
 internal sealed record SpawnedPokemonDefinition(
     string Name,
     IReadOnlyDictionary<SkillType, int> SkillLevels);
 
+/// <summary>
+/// Represents the SpawnedPokemonCatalog.
+/// </summary>
 internal static class SpawnedPokemonCatalog
 {
     private static readonly IReadOnlyDictionary<SkillType, int> NoSkills = new Dictionary<SkillType, int>();
@@ -34,6 +40,9 @@ internal static class SpawnedPokemonCatalog
         ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1)))
     };
 
+    /// <summary>
+    /// Executes the Get Or Default operation.
+    /// </summary>
     public static SpawnedPokemonDefinition GetOrDefault(string pokemonName)
     {
         if (Entries.TryGetValue(pokemonName, out SpawnedPokemonDefinition? definition))

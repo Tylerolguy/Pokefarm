@@ -4,8 +4,14 @@ using static Pokefarm.Game.BuildingWorkerHelpers;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the FarmGame.
+/// </summary>
 public sealed partial class FarmGame
 {
+    /// <summary>
+    /// Executes the Resolve Movement operation.
+    /// </summary>
     private Vector2 ResolveMovement(Vector2 candidatePosition)
     {
         Vector2 resolvedPosition = _playerPosition;
@@ -25,6 +31,9 @@ public sealed partial class FarmGame
         return resolvedPosition;
     }
 
+    /// <summary>
+    /// Executes the Try Place Selected Item operation.
+    /// </summary>
     private void TryPlaceSelectedItem()
     {
         if (_inputMode != InputMode.Placement || !_previewPlacementValid || _previewItem is null || _inventoryItems.Count == 0)
@@ -46,6 +55,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Toggle Inventory Mode operation.
+    /// </summary>
     private void ToggleInventoryMode()
     {
         if (_inputMode == InputMode.Inventory)
@@ -59,6 +71,9 @@ public sealed partial class FarmGame
         _inputMode = InputMode.Inventory;
     }
 
+    /// <summary>
+    /// Executes the Begin Placement From Inventory operation.
+    /// </summary>
     private void BeginPlacementFromInventory()
     {
         if (_selectedInventoryIndex >= _inventoryItems.Count)
@@ -76,6 +91,9 @@ public sealed partial class FarmGame
         UpdatePlacementPreview(Keyboard.GetState(), new GameTime(), false, false, false, false);
     }
 
+    /// <summary>
+    /// Executes the Exit Placement Mode operation.
+    /// </summary>
     private void ExitPlacementMode(InputMode nextMode)
     {
         _inputMode = nextMode;
@@ -83,6 +101,9 @@ public sealed partial class FarmGame
         _previewPlacementValid = false;
     }
 
+    /// <summary>
+    /// Executes the Begin Removal Mode operation.
+    /// </summary>
     private void BeginRemovalMode()
     {
         _inputMode = InputMode.Removal;
@@ -90,6 +111,9 @@ public sealed partial class FarmGame
         UpdateRemovalPreview(Keyboard.GetState(), new GameTime(), false, false, false, false);
     }
 
+    /// <summary>
+    /// Executes the Exit Removal Mode operation.
+    /// </summary>
     private void ExitRemovalMode(InputMode nextMode)
     {
         if (_inputMode == InputMode.Removal)
@@ -101,6 +125,9 @@ public sealed partial class FarmGame
         _removeSelectorBounds = Rectangle.Empty;
     }
 
+    /// <summary>
+    /// Executes the Update Placement Preview operation.
+    /// </summary>
     private void UpdatePlacementPreview(
         KeyboardState keyboard,
         GameTime gameTime,
@@ -166,6 +193,9 @@ public sealed partial class FarmGame
         _previewPlacementValid = CanPlaceItem(previewItem);
     }
 
+    /// <summary>
+    /// Executes the Update Removal Preview operation.
+    /// </summary>
     private void UpdateRemovalPreview(
         KeyboardState keyboard,
         GameTime gameTime,
@@ -229,6 +259,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Update Gameplay Movement operation.
+    /// </summary>
     private void UpdateGameplayMovement(KeyboardState keyboard, GameTime gameTime)
     {
         float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
@@ -278,6 +311,9 @@ public sealed partial class FarmGame
         _playerPosition = ResolveMovement(candidatePosition);
     }
 
+    /// <summary>
+    /// Executes the Update Inventory Navigation operation.
+    /// </summary>
     private void UpdateInventoryNavigation(bool moveLeft, bool moveRight, bool moveUp, bool moveDown)
     {
         int currentColumn = _selectedInventoryIndex % InventoryColumns;
@@ -307,6 +343,9 @@ public sealed partial class FarmGame
         _selectedInventoryIndex = Math.Clamp(newIndex, 0, (InventoryColumns * InventoryRows) - 1);
     }
 
+    /// <summary>
+    /// Executes the Can Place Item operation.
+    /// </summary>
     private bool CanPlaceItem(PlacedItem candidateItem)
     {
         Rectangle playerBounds = new((int)_playerPosition.X, (int)_playerPosition.Y, PlayerSize, PlayerSize);
@@ -370,6 +409,9 @@ public sealed partial class FarmGame
         return true;
     }
 
+    /// <summary>
+    /// Executes the Try Pick Up Selected Item operation.
+    /// </summary>
     private void TryPickUpSelectedItem()
     {
         if (_inputMode != InputMode.Removal || _removeTarget is null || _inventoryItems.Count >= InventoryColumns * InventoryRows)
@@ -412,6 +454,9 @@ public sealed partial class FarmGame
         UpdateRemovalPreview(Keyboard.GetState(), new GameTime(), false, false, false, false);
     }
 
+    /// <summary>
+    /// Executes the Try Interact With Building operation.
+    /// </summary>
     private void TryInteractWithBuilding()
     {
         if (_interactTarget is null)
@@ -423,6 +468,9 @@ public sealed partial class FarmGame
         OpenBuildingTalk(_interactTarget);
     }
 
+    /// <summary>
+    /// Executes the Try Talk With Pokemon operation.
+    /// </summary>
     private void TryTalkWithPokemon()
     {
         if (_talkTargetIndex < 0)
@@ -442,6 +490,9 @@ public sealed partial class FarmGame
         _inputMode = InputMode.Talking;
     }
 
+    /// <summary>
+    /// Executes the Open Crafting operation.
+    /// </summary>
     private void OpenCrafting(CraftingSource craftingSource)
     {
         _activeCraftingSource = craftingSource;
@@ -461,6 +512,9 @@ public sealed partial class FarmGame
         _selectedCraftingIndex = Math.Clamp(_selectedCraftingIndex, 0, Math.Max(0, activeRecipes.Count - 1));
     }
 
+    /// <summary>
+    /// Executes the Find Interactable Target operation.
+    /// </summary>
     private PlacedItem? FindInteractableTarget()
     {
         Rectangle searchArea = GetFacingInteractionArea();
@@ -481,6 +535,9 @@ public sealed partial class FarmGame
         return null;
     }
 
+    /// <summary>
+    /// Executes the Open Building Talk operation.
+    /// </summary>
     private void OpenBuildingTalk(PlacedItem building)
     {
         FaceConversationTarget(new Vector2(building.Bounds.Center.X, building.Bounds.Center.Y));
@@ -494,6 +551,9 @@ public sealed partial class FarmGame
         _inputMode = InputMode.Talking;
     }
 
+    /// <summary>
+    /// Executes the Find Nearby Pokemon Target Index operation.
+    /// </summary>
     private int FindNearbyPokemonTargetIndex()
     {
         Rectangle searchArea = GetFacingInteractionArea();
@@ -520,6 +580,9 @@ public sealed partial class FarmGame
         return -1;
     }
 
+    /// <summary>
+    /// Executes the Get Facing Interaction Area operation.
+    /// </summary>
     private Rectangle GetFacingInteractionArea()
     {
         Rectangle playerBounds = new((int)_playerPosition.X, (int)_playerPosition.Y, PlayerSize, PlayerSize);
@@ -542,6 +605,9 @@ public sealed partial class FarmGame
         return new Rectangle(playerBounds.X, y, playerBounds.Width, height);
     }
 
+    /// <summary>
+    /// Executes the Update Talk Navigation operation.
+    /// </summary>
     private void UpdateTalkNavigation(bool moveUp, bool moveDown)
     {
         if (moveUp)
@@ -555,6 +621,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Confirm Talk Option operation.
+    /// </summary>
     private void ConfirmTalkOption()
     {
         PokemonDialogueOption? selectedOption = _talkState.GetSelectedOption();
@@ -764,11 +833,17 @@ public sealed partial class FarmGame
         ExitTalkMode();
     }
 
+    /// <summary>
+    /// Executes the Begin Talk Exit Countdown operation.
+    /// </summary>
     private void BeginTalkExitCountdown()
     {
         _talkExitTimer = TalkExitDelaySeconds;
     }
 
+    /// <summary>
+    /// Executes the Exit Talk Mode operation.
+    /// </summary>
     private void ExitTalkMode()
     {
         _inputMode = InputMode.Gameplay;
@@ -776,6 +851,9 @@ public sealed partial class FarmGame
         _talkState.Reset();
     }
 
+    /// <summary>
+    /// Executes the Update Crafting Navigation operation.
+    /// </summary>
     private void UpdateCraftingNavigation(bool moveUp, bool moveDown, bool moveLeft, bool moveRight)
     {
         List<RecipeDefinition> activeRecipes = GetActiveRecipes();
@@ -800,6 +878,9 @@ public sealed partial class FarmGame
         _ = moveRight;
     }
 
+    /// <summary>
+    /// Executes the Open Pc Menu operation.
+    /// </summary>
     private void OpenPcMenu(PcMenuScreen screen)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Pc)
@@ -819,6 +900,9 @@ public sealed partial class FarmGame
         _talkExitTimer = 0f;
     }
 
+    /// <summary>
+    /// Executes the Close Pc Menu operation.
+    /// </summary>
     private void ClosePcMenu()
     {
         _inputMode = InputMode.Gameplay;
@@ -826,6 +910,9 @@ public sealed partial class FarmGame
         _activePcIndex = -1;
     }
 
+    /// <summary>
+    /// Executes the Update Pc Menu Navigation operation.
+    /// </summary>
     private void UpdatePcMenuNavigation(bool moveUp, bool moveDown)
     {
         int count = GetPcMenuEntryCount();
@@ -846,6 +933,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Confirm Pc Menu Option operation.
+    /// </summary>
     private void ConfirmPcMenuOption()
     {
         if (_inputMode != InputMode.PcMenu || _activePcMenuScreen != PcMenuScreen.Storage)
@@ -889,6 +979,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Get Pc Menu Entry Count operation.
+    /// </summary>
     private int GetPcMenuEntryCount()
     {
         return _activePcMenuScreen switch
@@ -899,6 +992,9 @@ public sealed partial class FarmGame
         };
     }
 
+    /// <summary>
+    /// Executes the Store Following Pokemon In Pc operation.
+    /// </summary>
     private void StoreFollowingPokemonInPc(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Pc)
@@ -937,6 +1033,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Try Find Nearby Open Pokemon Spawn Position operation.
+    /// </summary>
     private bool TryFindNearbyOpenPokemonSpawnPosition(Rectangle originBounds, out Vector2 spawnPosition)
     {
         Rectangle playableArea = new(
@@ -975,6 +1074,9 @@ public sealed partial class FarmGame
         return false;
     }
 
+    /// <summary>
+    /// Executes the Get Spawn Offsets operation.
+    /// </summary>
     private static IEnumerable<Point> GetSpawnOffsets(int radius)
     {
         if (radius == 0)
@@ -993,6 +1095,9 @@ public sealed partial class FarmGame
         yield return new Point(-radius, -radius);
     }
 
+    /// <summary>
+    /// Executes the Open Dungeon Menu operation.
+    /// </summary>
     private void OpenDungeonMenu()
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.DungeonPortal)
@@ -1006,6 +1111,9 @@ public sealed partial class FarmGame
         _talkExitTimer = 0f;
     }
 
+    /// <summary>
+    /// Executes the Close Dungeon Menu operation.
+    /// </summary>
     private void CloseDungeonMenu()
     {
         _inputMode = InputMode.Gameplay;
@@ -1015,6 +1123,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Update Dungeon Menu Navigation operation.
+    /// </summary>
     private void UpdateDungeonMenuNavigation(bool moveUp, bool moveDown)
     {
         if (_availableDungeons.Count == 0)
@@ -1034,6 +1145,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Confirm Dungeon Menu Selection operation.
+    /// </summary>
     private void ConfirmDungeonMenuSelection()
     {
         if (_inputMode != InputMode.DungeonMenu ||
@@ -1051,6 +1165,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Enter Dungeon Run operation.
+    /// </summary>
     private void EnterDungeonRun(GeneratedDungeon dungeonRun)
     {
         _activeDungeonRun = dungeonRun;
@@ -1063,6 +1180,9 @@ public sealed partial class FarmGame
             _worldBounds.Center.Y - (PlayerSize / 2f));
     }
 
+    /// <summary>
+    /// Executes the Advance Dungeon Room Or Exit operation.
+    /// </summary>
     private void AdvanceDungeonRoomOrExit()
     {
         if (_activeDungeonRun is null)
@@ -1083,6 +1203,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Leave Active Dungeon Run operation.
+    /// </summary>
     private void LeaveActiveDungeonRun(string messagePrefix)
     {
         if (_activeDungeonRun is null)
@@ -1102,6 +1225,9 @@ public sealed partial class FarmGame
         _activeDungeonPortalIndex = -1;
     }
 
+    /// <summary>
+    /// Executes the Get Dungeon Portal Exit Spawn Position operation.
+    /// </summary>
     private Vector2 GetDungeonPortalExitSpawnPosition()
     {
         PlacedItem? portal = null;

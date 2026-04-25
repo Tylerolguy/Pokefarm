@@ -1,5 +1,8 @@
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the SnackSpawnCatalog.
+/// </summary>
 internal static class SnackSpawnCatalog
 {
     private static readonly Dictionary<ItemDefinition, IReadOnlyList<WeightedPokemonSpawn>> SpawnBuckets = new()
@@ -34,6 +37,9 @@ internal static class SnackSpawnCatalog
         
     };
 
+    /// <summary>
+    /// Executes the Roll Spawn Name operation.
+    /// </summary>
     public static string RollSpawnName(ItemDefinition snackDefinition)
     {
         if (!SpawnBuckets.TryGetValue(snackDefinition, out IReadOnlyList<WeightedPokemonSpawn>? bucket) || bucket.Count == 0)

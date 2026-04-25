@@ -2,6 +2,9 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the DungeonCatalog.
+/// </summary>
 internal static class DungeonCatalog
 {
     public static readonly DungeonDefinition MysteryGrove = new(
@@ -226,6 +229,9 @@ internal static class DungeonCatalog
                 MinDepth: 4)
         ]);
 
+    /// <summary>
+    /// Executes the Create Room Template operation.
+    /// </summary>
     private static DungeonRoomTemplate CreateRoomTemplate(
         IReadOnlyList<string> layoutRows,
         IReadOnlyList<DungeonSpawnPoint> spawnPoints,

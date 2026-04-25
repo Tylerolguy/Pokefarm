@@ -2,6 +2,9 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Executes the Item Definition operation.
+/// </summary>
 internal sealed record ItemDefinition(
     string Name,
     Color Tint,

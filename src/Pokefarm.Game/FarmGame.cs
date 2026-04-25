@@ -9,6 +9,9 @@ using static Pokefarm.Game.WorkbenchCraftingHelpers;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the FarmGame.
+/// </summary>
 public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 {
     private const int InventoryColumns = 4;
@@ -176,6 +179,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         [' '] = ["000","000","000","000","000","000","000"]
     };
 
+    /// <summary>
+    /// Initializes a new instance of the FarmGame class.
+    /// </summary>
     public FarmGame()
     {
         _graphics = new GraphicsDeviceManager(this);
@@ -202,6 +208,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _placedItems.Add(new PlacedItem(portalBounds, ItemCatalog.DungeonPortal, 0d));
     }
 
+    /// <summary>
+    /// Executes the Load Content operation.
+    /// </summary>
     protected override void LoadContent()
     {
         _spriteBatch = new SpriteBatch(GraphicsDevice);
@@ -213,6 +222,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         TryStartBackgroundMusic();
     }
 
+    /// <summary>
+    /// Executes the Unload Content operation.
+    /// </summary>
     protected override void UnloadContent()
     {
         MediaPlayer.Stop();
@@ -239,6 +251,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         base.UnloadContent();
     }
 
+    /// <summary>
+    /// Executes the Try Start Background Music operation.
+    /// </summary>
     private void TryStartBackgroundMusic()
     {
         string musicPath = Path.Combine(AppContext.BaseDirectory, "Assets", StartupMusicFileName);
@@ -277,6 +292,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         TryStartBackgroundMusicWithWindowsPlayer(musicPath);
     }
 
+    /// <summary>
+    /// Executes the Try Start Background Music With Windows Player operation.
+    /// </summary>
     private void TryStartBackgroundMusicWithWindowsPlayer(string musicPath)
     {
         if (!OperatingSystem.IsWindows())
@@ -305,6 +323,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Update operation.
+    /// </summary>
     protected override void Update(GameTime gameTime)
     {
         KeyboardState keyboard = Keyboard.GetState();
@@ -541,6 +562,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         base.Update(gameTime);
     }
 
+    /// <summary>
+    /// Executes the Draw operation.
+    /// </summary>
     protected override void Draw(GameTime gameTime)
     {
         GraphicsDevice.Clear(new Color(77, 54, 36));
@@ -596,6 +620,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         base.Draw(gameTime);
     }
 
+    /// <summary>
+    /// Executes the Update Camera operation.
+    /// </summary>
     private void UpdateCamera()
     {
         Viewport viewport = GraphicsDevice.Viewport;
@@ -615,6 +642,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _cameraMatrix = Matrix.CreateTranslation(-cameraX, -cameraY - dialogueShift, 0f);
     }
 
+    /// <summary>
+    /// Executes the Collides With Placed Item operation.
+    /// </summary>
     private bool CollidesWithPlacedItem(Vector2 playerTopLeft)
     {
         if (_activeDungeonRun is not null)
@@ -670,6 +700,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return false;
     }
 
+    /// <summary>
+    /// Executes the Update Expired Snacks operation.
+    /// </summary>
     private void UpdateExpiredSnacks()
     {
         for (int index = _placedItems.Count - 1; index >= 0; index--)
@@ -706,6 +739,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Update Spawned Pokemon operation.
+    /// </summary>
     private void UpdateSpawnedPokemon(float deltaTime)
     {
         for (int index = 0; index < _spawnedDittos.Count; index++)
@@ -1044,6 +1080,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Try Move Spawned Pokemon operation.
+    /// </summary>
     private SpawnedPokemon TryMoveSpawnedPokemon(SpawnedPokemon pokemon, int pokemonIndex)
     {
         if (pokemon.IsFollowingPlayer)
@@ -1105,6 +1144,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return pokemon;
     }
 
+    /// <summary>
+    /// Executes the Collides With Spawned Pokemon operation.
+    /// </summary>
     private bool CollidesWithSpawnedPokemon(Rectangle candidateBounds, int currentPokemonIndex)
     {
         Rectangle playerBounds = new((int)_playerPosition.X, (int)_playerPosition.Y, PlayerSize, PlayerSize);
@@ -1141,11 +1183,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return false;
     }
 
+    /// <summary>
+    /// Executes the Get Random Move Delay Seconds operation.
+    /// </summary>
     private static float GetRandomMoveDelaySeconds()
     {
         return Random.Shared.NextSingle() * (SpawnedPokemonMaxMoveDelay - SpawnedPokemonMinMoveDelay) + SpawnedPokemonMinMoveDelay;
     }
 
+    /// <summary>
+    /// Executes the Update Resource Production operation.
+    /// </summary>
     private void UpdateResourceProduction(float deltaTime)
     {
         for (int index = 0; index < _placedItems.Count; index++)
@@ -1221,6 +1269,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Update Workbench Crafting operation.
+    /// </summary>
     private void UpdateWorkbenchCrafting(float deltaTime)
     {
         for (int index = 0; index < _placedItems.Count; index++)
@@ -1271,6 +1322,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Update Assigned Worker Activity States operation.
+    /// </summary>
     private void UpdateAssignedWorkerActivityStates()
     {
         for (int pokemonIndex = 0; pokemonIndex < _spawnedDittos.Count; pokemonIndex++)
@@ -1327,6 +1381,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Find Assigned Resource Building Index operation.
+    /// </summary>
     private int FindAssignedResourceBuildingIndex(int pokemonId)
     {
         for (int buildingIndex = 0; buildingIndex < _placedItems.Count; buildingIndex++)
@@ -1343,6 +1400,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return -1;
     }
 
+    /// <summary>
+    /// Executes the Is Assigned Building Full operation.
+    /// </summary>
     private bool IsAssignedBuildingFull(int pokemonId)
     {
         int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemonId);
@@ -1355,6 +1415,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return !HasAvailableProductionWork(building);
     }
 
+    /// <summary>
+    /// Executes the Has Available Production Work operation.
+    /// </summary>
     private static bool HasAvailableProductionWork(PlacedItem building)
     {
         ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
@@ -1363,6 +1426,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                building.StoredProducedUnits < building.Definition.MaxStoredProducedUnits;
     }
 
+    /// <summary>
+    /// Executes the Try Pick Random Wander Target In Home Range operation.
+    /// </summary>
     private Vector2? TryPickRandomWanderTargetInHomeRange(SpawnedPokemon pokemon, int pokemonIndex)
     {
         Rectangle playableArea = new(
@@ -1406,6 +1472,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return null;
     }
 
+    /// <summary>
+    /// Executes the Try Find Path Direction To Target Area operation.
+    /// </summary>
     private bool TryFindPathDirectionToTargetArea(
         Vector2 startPosition,
         Rectangle targetArea,
@@ -1503,6 +1572,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return false;
     }
 
+    /// <summary>
+    /// Executes the Can Reach Target Area From Position operation.
+    /// </summary>
     private bool CanReachTargetAreaFromPosition(Vector2 startPosition, Rectangle targetArea, int pokemonIndex)
     {
         if (targetArea.IsEmpty)
@@ -1524,11 +1596,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             ignoreDynamicActorCollisions: true);
     }
 
+    /// <summary>
+    /// Executes the Encode Point operation.
+    /// </summary>
     private static long EncodePoint(Point point)
     {
         return ((long)point.X << 32) | (uint)point.Y;
     }
 
+    /// <summary>
+    /// Executes the Try Collect Ready Workbench Item operation.
+    /// </summary>
     private bool TryCollectReadyWorkbenchItem(int workbenchIndex, out string? pickupMessage)
     {
         pickupMessage = null;
@@ -1558,6 +1636,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return true;
     }
 
+    /// <summary>
+    /// Executes the Try Set Workbench Worker operation.
+    /// </summary>
     private bool TrySetWorkbenchWorker(int workbenchIndex, int? pokemonId, out string? message)
     {
         message = null;
@@ -1615,6 +1696,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return true;
     }
 
+    /// <summary>
+    /// Executes the Update Unclaimed Pokemon Idle Animation operation.
+    /// </summary>
     private static SpawnedPokemon UpdateUnclaimedPokemonIdleAnimation(SpawnedPokemon pokemon, float deltaTime)
     {
         if (pokemon.IdleCyclePauseRemaining > 0f)
@@ -1651,6 +1735,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         };
     }
 
+    /// <summary>
+    /// Executes the Get Next Pokemon Move Delay Seconds operation.
+    /// </summary>
     private static float GetNextPokemonMoveDelaySeconds(SpawnedPokemon pokemon)
     {
         if (pokemon.IsFollowingPlayer)
@@ -1667,6 +1754,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return GetRandomMoveDelaySeconds();
     }
 
+    /// <summary>
+    /// Executes the Direction To Movement operation.
+    /// </summary>
     private static Vector2 DirectionToMovement(Direction direction)
     {
         return direction switch
@@ -1679,11 +1769,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         };
     }
 
+    /// <summary>
+    /// Executes the Get Direction Toward Player operation.
+    /// </summary>
     private Direction GetDirectionTowardPlayer(Vector2 pokemonPosition)
     {
         return GetDirectionTowardTarget(pokemonPosition, _playerPosition);
     }
 
+    /// <summary>
+    /// Executes the Get Follow Directions Toward Player operation.
+    /// </summary>
     private Direction[] GetFollowDirectionsTowardPlayer(Vector2 pokemonPosition)
     {
         Vector2 delta = _playerPosition - pokemonPosition;
@@ -1698,6 +1794,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return [vertical, horizontal];
     }
 
+    /// <summary>
+    /// Executes the Get Pokemon Wander Directions operation.
+    /// </summary>
     private Direction[] GetPokemonWanderDirections(SpawnedPokemon pokemon)
     {
         if (pokemon.HomePosition is Vector2 homePosition)
@@ -1719,6 +1818,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return directions;
     }
 
+    /// <summary>
+    /// Executes the Is Outside Home Range operation.
+    /// </summary>
     private bool IsOutsideHomeRange(SpawnedPokemon pokemon, Vector2 candidatePosition)
     {
         if (pokemon.IsFollowingPlayer)
@@ -1743,6 +1845,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return candidateDistanceSquared > radiusSquared;
     }
 
+    /// <summary>
+    /// Executes the Get Directions Toward Target operation.
+    /// </summary>
     private Direction[] GetDirectionsTowardTarget(Vector2 startPosition, Vector2 targetPosition)
     {
         Vector2 delta = targetPosition - startPosition;
@@ -1757,6 +1862,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return [vertical, horizontal];
     }
 
+    /// <summary>
+    /// Executes the Clear Existing Bed For Pokemon operation.
+    /// </summary>
     private void ClearExistingBedForPokemon(int pokemonId)
     {
         for (int index = 0; index < _placedItems.Count; index++)
@@ -1775,6 +1883,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Get Bed Home Position operation.
+    /// </summary>
     private static Vector2 GetBedHomePosition(PlacedItem bed)
     {
         return new Vector2(
@@ -1782,6 +1893,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             bed.Bounds.Center.Y - (PlayerSize / 2f));
     }
 
+    /// <summary>
+    /// Executes the Get Building Talk Options operation.
+    /// </summary>
     private List<PokemonDialogueOption> GetBuildingTalkOptions(PlacedItem building)
     {
         return BuildingDialogueService.GetOptions(
@@ -1793,6 +1907,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             GetProducedMaterialForBuilding);
     }
 
+    /// <summary>
+    /// Executes the Set Active Talk Icon operation.
+    /// </summary>
     private void SetActiveTalkIcon(string pokemonName)
     {
         if (_talkState.IconName == pokemonName)
@@ -1803,6 +1920,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _talkState.SetIcon(pokemonName, TryGetPokemonIconTexture(pokemonName, out Texture2D? iconTexture) ? iconTexture : null);
     }
 
+    /// <summary>
+    /// Executes the Try Get Pokemon Icon Texture operation.
+    /// </summary>
     private bool TryGetPokemonIconTexture(string pokemonName, out Texture2D? iconTexture)
     {
         if (_pokemonIconTextures.TryGetValue(pokemonName, out iconTexture))
@@ -1831,11 +1951,17 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return true;
     }
 
+    /// <summary>
+    /// Executes the Face Conversation Target operation.
+    /// </summary>
     private void FaceConversationTarget(Vector2 targetPosition)
     {
         _playerDirection = GetDirectionTowardTarget(_playerPosition, targetPosition);
     }
 
+    /// <summary>
+    /// Executes the Face Pokemon Toward Player operation.
+    /// </summary>
     private void FacePokemonTowardPlayer(int pokemonIndex)
     {
         if (pokemonIndex < 0 || pokemonIndex >= _spawnedDittos.Count)
@@ -1853,6 +1979,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         };
     }
 
+    /// <summary>
+    /// Executes the Get Direction Toward Target operation.
+    /// </summary>
     private static Direction GetDirectionTowardTarget(Vector2 sourcePosition, Vector2 targetPosition)
     {
         Vector2 delta = targetPosition - sourcePosition;
@@ -1869,6 +1998,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return delta.Y < 0f ? Direction.Up : Direction.Down;
     }
 
+    /// <summary>
+    /// Executes the Move Toward operation.
+    /// </summary>
     private static float MoveToward(float current, float target, float maxDelta)
     {
         if (MathF.Abs(target - current) <= maxDelta)
@@ -1879,6 +2011,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return current + MathF.Sign(target - current) * maxDelta;
     }
 
+    /// <summary>
+    /// Executes the Get Removal Selector Size operation.
+    /// </summary>
     private Point GetRemovalSelectorSize()
     {
         if (_removeTarget is not null)
@@ -1901,6 +2036,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return new Point(maxSize, maxSize);
     }
 
+    /// <summary>
+    /// Executes the Add Inventory Item operation.
+    /// </summary>
     private void AddInventoryItem(ItemDefinition definition, int quantity)
     {
         int existingIndex = _inventoryItems.FindIndex(entry => entry.Definition == definition);
@@ -1914,12 +2052,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _inventoryItems.Add(new InventoryEntry(definition, quantity));
     }
 
+    /// <summary>
+    /// Executes the Get Inventory Quantity operation.
+    /// </summary>
     private int GetInventoryQuantity(ItemDefinition definition)
     {
         InventoryEntry? entry = _inventoryItems.Find(entry => entry.Definition == definition);
         return entry?.Quantity ?? 0;
     }
 
+    /// <summary>
+    /// Executes the Can Craft Recipe operation.
+    /// </summary>
     private bool CanCraftRecipe(RecipeDefinition recipe)
     {
         foreach (RecipeCost cost in recipe.Costs)
@@ -1933,6 +2077,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return true;
     }
 
+    /// <summary>
+    /// Executes the Craft Selected Recipe operation.
+    /// </summary>
     private void CraftSelectedRecipe()
     {
         List<RecipeDefinition> activeRecipes = GetActiveRecipes();
@@ -2032,12 +2179,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Get Active Recipes operation.
+    /// </summary>
     private List<RecipeDefinition> GetActiveRecipes()
     {
         return _unlockedRecipes
             .FindAll(recipe => recipe.Source == _activeCraftingSource);
     }
 
+    /// <summary>
+    /// Executes the Get Crafting Title operation.
+    /// </summary>
     private string GetCraftingTitle()
     {
         return _activeCraftingSource switch
@@ -2049,6 +2202,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         };
     }
 
+    /// <summary>
+    /// Executes the Remove Inventory Unit At operation.
+    /// </summary>
     private void RemoveInventoryUnitAt(int index)
     {
         InventoryEntry entry = _inventoryItems[index];
@@ -2061,6 +2217,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _inventoryItems.RemoveAt(index);
     }
 
+    /// <summary>
+    /// Executes the Remove Inventory Item operation.
+    /// </summary>
     private void RemoveInventoryItem(ItemDefinition definition, int quantity)
     {
         int existingIndex = _inventoryItems.FindIndex(entry => entry.Definition == definition);
@@ -2085,6 +2244,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _inventoryItems[existingIndex] = entry with { Quantity = remaining };
     }
 
+    /// <summary>
+    /// Executes the Create Circle Texture operation.
+    /// </summary>
     private Texture2D CreateCircleTexture(int diameter)
     {
         Texture2D texture = new(GraphicsDevice, diameter, diameter);
@@ -2105,6 +2267,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return texture;
     }
 
+    /// <summary>
+    /// Executes the Try Get Pokemon Sprite Data operation.
+    /// </summary>
     private bool TryGetPokemonSpriteData(
         string pokemonName,
         out Texture2D? spriteSheet,
@@ -2122,6 +2287,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return false;
     }
 
+    /// <summary>
+    /// Executes the Ensure Pokemon Sprite Loaded operation.
+    /// </summary>
     private void EnsurePokemonSpriteLoaded(string pokemonName)
     {
         if (_pokemonSpriteLoadAttempted.Contains(pokemonName))
@@ -2145,6 +2313,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _pokemonFrames[pokemonName] = frames;
     }
 
+    /// <summary>
+    /// Executes the Load Sprite Set operation.
+    /// </summary>
     private void LoadSpriteSet(
         string spritePath,
         string atlasPath,
@@ -2198,6 +2369,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Update Player Direction operation.
+    /// </summary>
     private void UpdatePlayerDirection(Vector2 movement)
     {
         if (MathF.Abs(movement.X) > MathF.Abs(movement.Y))
@@ -2212,6 +2386,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
     }
 
+    /// <summary>
+    /// Executes the Update Walk Animation operation.
+    /// </summary>
     private void UpdateWalkAnimation(float deltaTime)
     {
         _walkAnimationTimer += deltaTime;
@@ -2224,6 +2401,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _walkAnimationFrame = (_walkAnimationFrame + 1) % 5;
     }
 
+    /// <summary>
+    /// Executes the Update Player Idle Animation operation.
+    /// </summary>
     private void UpdatePlayerIdleAnimation(float deltaTime)
     {
         _playerIdleAnimationTimer += deltaTime;
@@ -2236,6 +2416,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         _playerIdleAnimationFrame = (_playerIdleAnimationFrame + 1) % PlayerIdleFrameCount;
     }
 
+    /// <summary>
+    /// Executes the Get Current Player Frame operation.
+    /// </summary>
     private SpriteFrame? GetCurrentPlayerFrame(
         Dictionary<string, SpriteFrame> frames,
         Direction direction,

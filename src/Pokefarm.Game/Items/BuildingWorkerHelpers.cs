@@ -2,8 +2,14 @@ using Microsoft.Xna.Framework;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the BuildingWorkerHelpers.
+/// </summary>
 internal static class BuildingWorkerHelpers
 {
+    /// <summary>
+    /// Executes the Get Resource Building Exit Bounds operation.
+    /// </summary>
     public static Rectangle GetResourceBuildingExitBounds(PlacedItem building)
     {
         if (!building.Definition.IsBuildingLike || building.Definition.ExitSize.X <= 0 || building.Definition.ExitSize.Y <= 0)
@@ -19,6 +25,9 @@ internal static class BuildingWorkerHelpers
             size.Y);
     }
 
+    /// <summary>
+    /// Executes the Get Worker Respawn Position operation.
+    /// </summary>
     public static Vector2 GetWorkerRespawnPosition(PlacedItem building, int playerSize = 32)
     {
         Rectangle exitBounds = GetResourceBuildingExitBounds(building);
@@ -32,6 +41,9 @@ internal static class BuildingWorkerHelpers
             building.Bounds.Bottom + 4f);
     }
 
+    /// <summary>
+    /// Executes the Get Pokemon Effort Per Second operation.
+    /// </summary>
     public static float GetPokemonEffortPerSecond(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
     {
         SkillType requiredSkill = buildingDefinition.RequiredSkill;
@@ -49,6 +61,9 @@ internal static class BuildingWorkerHelpers
         return skillLevel;
     }
 
+    /// <summary>
+    /// Executes the Get Worker Pokemon Ids operation.
+    /// </summary>
     public static List<int> GetWorkerPokemonIds(PlacedItem building)
     {
         List<int> workerIds = [];
@@ -70,6 +85,9 @@ internal static class BuildingWorkerHelpers
         return workerIds;
     }
 
+    /// <summary>
+    /// Executes the Get Worker Pokemon Names operation.
+    /// </summary>
     public static List<string> GetWorkerPokemonNames(PlacedItem building)
     {
         List<string> workerNames = [];
@@ -91,6 +109,9 @@ internal static class BuildingWorkerHelpers
         return workerNames;
     }
 
+    /// <summary>
+    /// Executes the Has Worker operation.
+    /// </summary>
     public static bool HasWorker(PlacedItem building, int pokemonId)
     {
         return building.WorkerPokemonId == pokemonId ||
@@ -98,6 +119,9 @@ internal static class BuildingWorkerHelpers
                building.WorkerPokemonId3 == pokemonId;
     }
 
+    /// <summary>
+    /// Executes the Add Worker To Building operation.
+    /// </summary>
     public static PlacedItem AddWorkerToBuilding(PlacedItem building, SpawnedPokemon pokemon)
     {
         if (!building.WorkerPokemonId.HasValue)
@@ -118,6 +142,9 @@ internal static class BuildingWorkerHelpers
         return building;
     }
 
+    /// <summary>
+    /// Executes the Remove Worker From Building operation.
+    /// </summary>
     public static PlacedItem RemoveWorkerFromBuilding(PlacedItem building, int pokemonId)
     {
         if (building.WorkerPokemonId == pokemonId)
@@ -138,6 +165,9 @@ internal static class BuildingWorkerHelpers
         return building;
     }
 
+    /// <summary>
+    /// Executes the Get Production Step Label operation.
+    /// </summary>
     public static string GetProductionStepLabel(PlacedItem building)
     {
         if (building.Definition == ItemCatalog.Farm)

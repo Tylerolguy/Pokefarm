@@ -3,8 +3,14 @@ using static Pokefarm.Game.BuildingWorkerHelpers;
 
 namespace Pokefarm.Game;
 
+/// <summary>
+/// Represents the FarmGame.
+/// </summary>
 public sealed partial class FarmGame
 {
+    /// <summary>
+    /// Executes the Assign Pokemon To Active Workbench operation.
+    /// </summary>
     private void AssignPokemonToActiveWorkbench(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -41,6 +47,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Unassign Pokemon From Active Workbench operation.
+    /// </summary>
     private void UnassignPokemonFromActiveWorkbench(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -64,6 +73,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Dequeue Active Workbench Item operation.
+    /// </summary>
     private void DequeueActiveWorkbenchItem()
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -111,6 +123,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Collect Ready Workbench Item From Talk operation.
+    /// </summary>
     private void CollectReadyWorkbenchItemFromTalk()
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.WorkBench)
@@ -137,6 +152,9 @@ public sealed partial class FarmGame
         _talkState.SetText("ITEM PICKED UP");
     }
 
+    /// <summary>
+    /// Executes the Is Workbench Within Pokemon Bed Range operation.
+    /// </summary>
     private static bool IsWorkbenchWithinPokemonBedRange(SpawnedPokemon pokemon, PlacedItem workbench)
     {
         if (pokemon.HomePosition is not Vector2 homePosition)
@@ -150,6 +168,9 @@ public sealed partial class FarmGame
         return Vector2.DistanceSquared(homePosition, workbenchCenter) <= HomeWanderRadius * HomeWanderRadius;
     }
 
+    /// <summary>
+    /// Executes the Set Active Farm Plant operation.
+    /// </summary>
     private void SetActiveFarmPlant(ItemDefinition plant)
     {
         if (_activeFarmIndex < 0 || _activeFarmIndex >= _placedItems.Count)
@@ -176,6 +197,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Assign Pokemon Home operation.
+    /// </summary>
     private void AssignPokemonHome(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Bed)
@@ -224,6 +248,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Assign Pokemon To Resource Building operation.
+    /// </summary>
     private void AssignPokemonToResourceBuilding(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
@@ -278,6 +305,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Unassign Pokemon From Active Resource Building operation.
+    /// </summary>
     private void UnassignPokemonFromActiveResourceBuilding(int pokemonId)
     {
         if (_talkState.ActiveBuilding is null || !_talkState.ActiveBuilding.Definition.IsResourceProduction)
@@ -337,6 +367,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Collect Produced Materials From Active Building operation.
+    /// </summary>
     private void CollectProducedMaterialsFromActiveBuilding()
     {
         if (_talkState.ActiveBuilding is null)
@@ -374,6 +407,9 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    /// <summary>
+    /// Executes the Clear Existing Work Building For Pokemon operation.
+    /// </summary>
     private void ClearExistingWorkBuildingForPokemon(int pokemonId)
     {
         for (int index = 0; index < _placedItems.Count; index++)
@@ -399,6 +435,9 @@ public sealed partial class FarmGame
         }
     }
 
+    /// <summary>
+    /// Executes the Can Assign Pokemon To Resource Building operation.
+    /// </summary>
     private bool CanAssignPokemonToResourceBuilding(SpawnedPokemon pokemon, PlacedItem building)
     {
         if (!building.Definition.IsResourceProduction)
@@ -446,6 +485,9 @@ public sealed partial class FarmGame
         return CanReachTargetAreaFromPosition(pokemon.Position, exitBounds, pokemonIndex);
     }
 
+    /// <summary>
+    /// Executes the Is Building Exit Within Pokemon Bed Range operation.
+    /// </summary>
     private static bool IsBuildingExitWithinPokemonBedRange(SpawnedPokemon pokemon, PlacedItem building)
     {
         if (pokemon.HomePosition is not Vector2 homePosition)
@@ -463,12 +505,18 @@ public sealed partial class FarmGame
         return Vector2.DistanceSquared(homePosition, exitCenter) <= HomeWanderRadius * HomeWanderRadius;
     }
 
+    /// <summary>
+    /// Executes the Pokemon Has Skill For Building operation.
+    /// </summary>
     private static bool PokemonHasSkillForBuilding(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
     {
         SkillType requiredSkill = buildingDefinition.RequiredSkill;
         return requiredSkill == SkillType.None || pokemon.GetSkillLevel(requiredSkill) > 0;
     }
 
+    /// <summary>
+    /// Executes the Get Produced Material For Building operation.
+    /// </summary>
     private static ItemDefinition? GetProducedMaterialForBuilding(PlacedItem building)
     {
         if (!building.Definition.IsResourceProduction)
