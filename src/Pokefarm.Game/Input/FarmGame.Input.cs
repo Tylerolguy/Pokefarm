@@ -47,6 +47,8 @@ public sealed partial class FarmGame
         {
             _selectedInventoryIndex = _inventoryItems.Count - 1;
         }
+
+        EnsureInventorySelectionVisible();
     }
 
     // Switches inventory Mode between modes and applies associated state resets.
@@ -61,6 +63,7 @@ public sealed partial class FarmGame
         ExitPlacementMode(InputMode.Gameplay);
         ExitRemovalMode(InputMode.Gameplay);
         _inputMode = InputMode.Inventory;
+        EnsureInventorySelectionVisible();
     }
 
     // Enters placement From Inventory flow and initializes transient interaction state.
@@ -292,31 +295,69 @@ public sealed partial class FarmGame
     // Ticks inventory Navigation each frame and keeps related timers and state synchronized.
     private void UpdateInventoryNavigation(bool moveLeft, bool moveRight, bool moveUp, bool moveDown)
     {
-        int currentColumn = _selectedInventoryIndex % InventoryColumns;
-        int currentRow = _selectedInventoryIndex / InventoryColumns;
-
-        if (moveLeft)
+        if (_inventoryItems.Count == 0)
         {
-            currentColumn = Math.Max(0, currentColumn - 1);
+            _selectedInventoryIndex = 0;
+            _inventoryVisibleStartIndex = 0;
+            return;
         }
 
-        if (moveRight)
+        EnsureInventorySelectionVisible();
+
+        int visibleSlots = InventoryColumns * InventoryRows;
+        int currentLocalIndex = _selectedInventoryIndex - _inventoryVisibleStartIndex;
+        int currentColumn = Math.Clamp(currentLocalIndex % InventoryColumns, 0, InventoryColumns - 1);
+        int currentRow = Math.Clamp(currentLocalIndex / InventoryColumns, 0, InventoryRows - 1);
+
+        if (moveLeft && currentColumn > 0)
         {
-            currentColumn = Math.Min(InventoryColumns - 1, currentColumn + 1);
+            int candidate = _selectedInventoryIndex - 1;
+            if (candidate >= _inventoryVisibleStartIndex)
+            {
+                _selectedInventoryIndex = candidate;
+            }
+        }
+
+        if (moveRight && currentColumn < InventoryColumns - 1)
+        {
+            int candidate = _selectedInventoryIndex + 1;
+            if (candidate < _inventoryItems.Count && candidate < _inventoryVisibleStartIndex + visibleSlots)
+            {
+                _selectedInventoryIndex = candidate;
+            }
         }
 
         if (moveUp)
         {
-            currentRow = Math.Max(0, currentRow - 1);
+            int candidate = _selectedInventoryIndex - InventoryColumns;
+            if (candidate >= _inventoryVisibleStartIndex)
+            {
+                _selectedInventoryIndex = candidate;
+            }
+            else if (_inventoryVisibleStartIndex > 0)
+            {
+                _inventoryVisibleStartIndex = Math.Max(0, _inventoryVisibleStartIndex - InventoryColumns);
+                _selectedInventoryIndex = Math.Max(0, _selectedInventoryIndex - InventoryColumns);
+            }
         }
 
         if (moveDown)
         {
-            currentRow = Math.Min(InventoryRows - 1, currentRow + 1);
+            int candidate = _selectedInventoryIndex + InventoryColumns;
+            if (candidate < _inventoryItems.Count && candidate < _inventoryVisibleStartIndex + visibleSlots)
+            {
+                _selectedInventoryIndex = candidate;
+            }
+            else if (_inventoryVisibleStartIndex + visibleSlots < _inventoryItems.Count)
+            {
+                _inventoryVisibleStartIndex = Math.Min(
+                    Math.Max(0, _inventoryItems.Count - visibleSlots),
+                    _inventoryVisibleStartIndex + InventoryColumns);
+                _selectedInventoryIndex = Math.Min(_inventoryItems.Count - 1, _selectedInventoryIndex + InventoryColumns);
+            }
         }
 
-        int newIndex = (currentRow * InventoryColumns) + currentColumn;
-        _selectedInventoryIndex = Math.Clamp(newIndex, 0, (InventoryColumns * InventoryRows) - 1);
+        EnsureInventorySelectionVisible();
     }
 
     // Checks whether place Item is currently true for the active world state.
@@ -380,15 +421,68 @@ public sealed partial class FarmGame
             }
         }
 
+        if (candidateItem.Definition.IsBuildingLike)
+        {
+            foreach (SpawnedPokemon pokemon in _spawnedDittos)
+            {
+                if (pokemon.IsWorking)
+                {
+                    continue;
+                }
+
+                Rectangle pokemonBounds = new(
+                    (int)pokemon.Position.X,
+                    (int)pokemon.Position.Y,
+                    PlayerSize,
+                    PlayerSize);
+
+                if (candidateItem.Bounds.Intersects(pokemonBounds))
+                {
+                    return false;
+                }
+
+                if (!candidateExitBounds.IsEmpty && candidateExitBounds.Intersects(pokemonBounds))
+                {
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 
     // Attempts to pick Up Selected Item and reports success so callers can handle failure without exceptions.
     private void TryPickUpSelectedItem()
     {
-        if (_inputMode != InputMode.Removal || _removeTarget is null || _inventoryItems.Count >= InventoryColumns * InventoryRows)
+        if (_inputMode != InputMode.Removal || _removeTarget is null)
         {
             return;
+        }
+
+        ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(_removeTarget);
+        if (_removeTarget.Definition.IsResourceProduction &&
+            producedMaterial is not null &&
+            _removeTarget.StoredProducedUnits > 0 &&
+            !CanAddInventoryItem(producedMaterial))
+        {
+            _interactionMessage = "INVENTORY FULL";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        if (!CanAddInventoryItem(_removeTarget.Definition))
+        {
+            _interactionMessage = "INVENTORY FULL";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        if (_removeTarget.Definition == ItemCatalog.Bed)
+        {
+            foreach (int residentPokemonId in GetBedResidentPokemonIds(_removeTarget))
+            {
+                UnclaimPokemon(residentPokemonId);
+            }
         }
 
         foreach (int workerPokemonId in GetWorkerPokemonIds(_removeTarget))
@@ -412,7 +506,6 @@ public sealed partial class FarmGame
             }
         }
 
-        ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(_removeTarget);
         if (_removeTarget.Definition.IsResourceProduction &&
             producedMaterial is not null &&
             _removeTarget.StoredProducedUnits > 0)
@@ -631,6 +724,16 @@ public sealed partial class FarmGame
             else
             {
                 ExitTalkMode();
+            }
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.UnassignBedResident && selectedOption.TargetPokemonId.HasValue)
+        {
+            UnassignPokemonFromActiveBed(selectedOption.TargetPokemonId.Value);
+            if (selectedOption.ExitAfterDelay)
+            {
+                BeginTalkExitCountdown();
             }
             return;
         }

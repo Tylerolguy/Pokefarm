@@ -1,0 +1,41 @@
+Backlog Audit Through "Quests"
+
+Date: 2026-04-25
+Scope: Backlog sections from Buildings through Quests (inclusive)
+
+1) Construction system is not implemented.
+- No construction-site state, no multi-skill construction effort, and no construction progress loop.
+- Placed items are added instantly when placed.
+
+2) Bed system is incomplete (this is the issue being addressed first).
+- Needed: bed capacities, capacity checks on assignment, unassign options, and unclaim-on-bed-removal behavior.
+
+3) Inventory behavior does not match backlog overflow requirements.
+- UI shows 8 slots, but data can exceed 8 stacks with no inventory paging/arrow navigation for overflow.
+
+4) Placement mode does not block placement on Pokemon.
+- Placement checks world bounds/player/items, but not spawned Pokemon collision.
+
+5) Pokemon dialogue options/content do not match backlog specification.
+- Claimed/unclaimed option sets are simplified and missing required lines/options like check skills and how are you doing.
+
+6) Resource-building assignment feedback is too generic.
+- Backlog expects specific failure reasons (bed too far, wrong skill, insufficient skill level).
+
+7) Farm production stages are present visually but not skill-gated per stage.
+- Planting/watering/harvesting stage skill requirements are not enforced per stage.
+
+8) Workbench crafting queue/storage behavior is simplified.
+- Current implementation is effectively single queue item with no separate storage capacity behavior.
+
+9) Pokemon uniqueness is not globally enforced.
+- Snack spawn uniqueness was added, but other spawn paths (e.g., PC release) can still duplicate species.
+
+10) PC storage flow is partial vs backlog.
+- Missing action submenu behavior (release/place on farm/store from same list context) and icon-focused storage UX.
+
+11) PC "save" action is missing.
+- Backlog expects save from PC interaction options.
+
+12) Quest system is mostly placeholder.
+- Current quest data is name-only with no objectives/rewards/giver/progress/detail model.

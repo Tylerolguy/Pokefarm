@@ -17,7 +17,9 @@ internal sealed record ItemDefinition(
     int MaxStoredProducedUnits = 0,
     int ProductionStepCount = 1,
     int MaxWorkers = 1,
-    Point ExitSize = default)
+    Point ExitSize = default,
+    int BedCapacity = 1,
+    int RequiredSkillLevel = 1)
 {
     public bool IsBuildingLike => Kind == ItemKind.Building || Kind == ItemKind.ResourceProductionBuilding;
 

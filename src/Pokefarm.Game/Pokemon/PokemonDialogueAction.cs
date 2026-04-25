@@ -6,6 +6,7 @@ internal enum PokemonDialogueAction
     None,
     ToggleFollowing,
     SetHome,
+    UnassignBedResident,
     AssignResourceWork,
     UnassignResourceWork,
     CollectProduction,

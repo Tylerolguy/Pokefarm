@@ -6,49 +6,69 @@ internal static class PokemonDialogueService
     // Computes and returns opening Text without mutating persistent game state.
     public static string GetOpeningText(SpawnedPokemon pokemon)
     {
-        if (!pokemon.IsClaimed && !pokemon.IsFollowingPlayer)
+        if (!pokemon.IsClaimed)
         {
-            return "HI I WOULD LOVE TO MOVE IN HERE";
+            return "I WOULD LOVE TO MOVE IN HERE.";
         }
 
-        if (!pokemon.IsClaimed && pokemon.IsFollowingPlayer)
-        {
-            return "HAVE YOU FOUND ME A BED";
-        }
-
-        return "HI!";
+        return "HI DITTO";
     }
 
     // Computes and returns options without mutating persistent game state.
     public static List<PokemonDialogueOption> GetOptions(SpawnedPokemon pokemon)
     {
-        if (!pokemon.IsClaimed && !pokemon.IsFollowingPlayer)
+        if (!pokemon.IsClaimed)
         {
+            PokemonDialogueOption findBedOption = !pokemon.IsFollowingPlayer
+                ? new("FIND A BED", PokemonDialogueAction.ToggleFollowing, "I WILL WAIT HERE UNTIL YOU FIND A BED.", ExitAfterDelay: true)
+                : new("FIND A BED", PokemonDialogueAction.SetText, "IM ALREADY WAITING FOR A BED.");
+
+            string skillsText = BuildSkillsText(pokemon);
             return
             [
-                new("WANT TO LIVE HERE", PokemonDialogueAction.ToggleFollowing, "I WILL WAIT HERE UNTIL YOU FIND A BED", ExitAfterDelay: true),
-                new("BYE", PokemonDialogueAction.Exit, "BYE", ExitAfterDelay: true),
-                new("LEAVE", PokemonDialogueAction.None)
+                findBedOption,
+                new("CHECK SKILLS", PokemonDialogueAction.SetText, skillsText),
+                new("BYE", PokemonDialogueAction.Exit, "BYE", ExitAfterDelay: true)
             ];
         }
 
-        if (!pokemon.IsClaimed && pokemon.IsFollowingPlayer)
-        {
-            return
-            [
-                new("CANT FIND ONE", PokemonDialogueAction.ToggleFollowing, "OK LET ME KNOW IF YOU CAN FIND ONE", ExitAfterDelay: true),
-                new("BYE", PokemonDialogueAction.Exit, "BYE", ExitAfterDelay: true),
-                new("LEAVE", PokemonDialogueAction.None)
-            ];
-        }
-
-        string followOption = pokemon.IsFollowingPlayer ? "STOP FOLLOWING" : "FOLLOW ME";
-        string followResponse = pokemon.IsFollowingPlayer ? "OK I WILL WAIT HERE" : "SURE I WILL FOLLOW YOU";
+        PokemonDialogueOption followOption = !pokemon.IsFollowingPlayer
+            ? new("FOLLOW ME", PokemonDialogueAction.ToggleFollowing, "SURE I WILL FOLLOW YOU.", ExitAfterDelay: true)
+            : new("FOLLOW ME", PokemonDialogueAction.SetText, "IM ALREADY FOLLOWING YOU.");
+        string claimedSkillsText = BuildSkillsText(pokemon);
         return
         [
-            new(followOption, PokemonDialogueAction.ToggleFollowing, followResponse, ExitAfterDelay: true),
-            new("BYE", PokemonDialogueAction.Exit, "BYE", ExitAfterDelay: true),
-            new("LEAVE", PokemonDialogueAction.None)
+            followOption,
+            new("CHECK SKILLS", PokemonDialogueAction.SetText, claimedSkillsText),
+            new("HOW ARE YOU DOING", PokemonDialogueAction.SetText, "IM GOOD HOW ARE YOU."),
+            new("BYE", PokemonDialogueAction.Exit, "BYE", ExitAfterDelay: true)
         ];
+    }
+
+    // Builds a readable skill summary for dialogue responses.
+    private static string BuildSkillsText(SpawnedPokemon pokemon)
+    {
+        if (pokemon.SkillLevels is null || pokemon.SkillLevels.Count == 0)
+        {
+            return "I DONT HAVE ANY SKILLS YET.";
+        }
+
+        List<string> skillEntries = [];
+        foreach ((SkillType skill, int level) in pokemon.SkillLevels)
+        {
+            if (skill == SkillType.None || level <= 0)
+            {
+                continue;
+            }
+
+            skillEntries.Add($"{skill.ToString().ToUpperInvariant()} {level}");
+        }
+
+        if (skillEntries.Count == 0)
+        {
+            return "I DONT HAVE ANY SKILLS YET.";
+        }
+
+        return $"MY SKILLS: {string.Join(", ", skillEntries)}";
     }
 }

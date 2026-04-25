@@ -385,6 +385,11 @@ public sealed partial class FarmGame
             : _circleTexture;
         _spriteBatch.Draw(texture, _previewItem.Bounds, tint);
         DrawPanelBorder(_previewItem.Bounds, _previewPlacementValid ? new Color(255, 245, 180) : new Color(180, 70, 70));
+
+        if (_previewItem.Definition.IsBuildingLike)
+        {
+            DrawResourceExitMarker(_previewItem);
+        }
     }
 
     // Draws spawned Dittos for the current frame using the active render context.
@@ -480,24 +485,28 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(_pixel, panel, new Color(44, 31, 23, 240));
         DrawPanelBorder(panel, new Color(181, 138, 95));
 
-        for (int slotIndex = 0; slotIndex < InventoryColumns * InventoryRows; slotIndex++)
+        int visibleSlots = InventoryColumns * InventoryRows;
+        int scrollOffset = _inventoryVisibleStartIndex;
+
+        for (int slotIndex = 0; slotIndex < visibleSlots; slotIndex++)
         {
             int column = slotIndex % InventoryColumns;
             int row = slotIndex / InventoryColumns;
+            int entryIndex = scrollOffset + slotIndex;
             Rectangle slot = new(
                 panel.X + 84 + (column * 140),
                 panel.Y + 74 + (row * 140),
                 96,
                 96);
-            bool hasItem = slotIndex < _inventoryItems.Count;
-            bool selected = slotIndex == _selectedInventoryIndex;
+            bool hasItem = entryIndex < _inventoryItems.Count;
+            bool selected = entryIndex == _selectedInventoryIndex;
 
             _spriteBatch.Draw(_pixel, slot, hasItem ? new Color(88, 66, 49) : new Color(58, 43, 33));
             DrawPanelBorder(slot, selected ? Color.Gold : new Color(120, 90, 65));
 
             if (hasItem)
             {
-                InventoryEntry entry = _inventoryItems[slotIndex];
+                InventoryEntry entry = _inventoryItems[entryIndex];
                 int iconSize = Math.Min(64, Math.Max(entry.Definition.Size.X, entry.Definition.Size.Y));
                 Rectangle iconBounds = new(
                     slot.Center.X - (iconSize / 2),
@@ -530,6 +539,16 @@ public sealed partial class FarmGame
                     new Vector2(quantityBadge.X + 6, quantityBadge.Y + 3),
                     new Color(236, 220, 196));
             }
+        }
+
+        if (scrollOffset > 0)
+        {
+            DrawTriangleIndicator(new Point(panel.Right - 32, panel.Y + 28), true, new Color(236, 220, 196));
+        }
+
+        if (scrollOffset + visibleSlots < _inventoryItems.Count)
+        {
+            DrawTriangleIndicator(new Point(panel.Right - 32, panel.Bottom - 28), false, new Color(236, 220, 196));
         }
     }
 
@@ -1051,9 +1070,14 @@ public sealed partial class FarmGame
             DrawPromptPanel($"PRESS Q TO TALK TO {pokemonName}", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 104));
         }
 
-        if (_interactTarget?.Definition == ItemCatalog.Bed && !string.IsNullOrEmpty(_interactTarget.ResidentPokemonName))
+        if (_interactTarget?.Definition == ItemCatalog.Bed)
         {
-            DrawPromptPanel($"{_interactTarget.ResidentPokemonName!.ToUpperInvariant()} LIVES HERE", new Point(GraphicsDevice.Viewport.Width / 2, 48));
+            List<string> residents = GetBedResidentPokemonNames(_interactTarget);
+            if (residents.Count > 0)
+            {
+                string residentText = string.Join(", ", residents.Select(name => name.ToUpperInvariant()));
+                DrawPromptPanel($"{residentText} LIVE HERE", new Point(GraphicsDevice.Viewport.Width / 2, 48));
+            }
         }
         if (_interactTarget is not null)
         {

@@ -13,18 +13,40 @@ internal static class BuildingDialogueService
     public static List<PokemonDialogueOption> GetOptions(
         PlacedItem building,
         IReadOnlyList<SpawnedPokemon> spawnedPokemon,
-        Func<SpawnedPokemon, PlacedItem, bool> canAssignToResourceBuilding,
-        Func<SpawnedPokemon, PlacedItem, bool> isBuildingExitWithinBedRange,
         Func<SpawnedPokemon, PlacedItem, bool> isWorkbenchWithinBedRange,
         Func<PlacedItem, ItemDefinition?> getProducedMaterialForBuilding)
     {
         List<PokemonDialogueOption> options = [];
         if (building.Definition == ItemCatalog.Bed)
         {
+            foreach (int residentPokemonId in BuildingWorkerHelpers.GetBedResidentPokemonIds(building))
+            {
+                SpawnedPokemon? resident = spawnedPokemon.FirstOrDefault(pokemon => pokemon.PokemonId == residentPokemonId);
+                if (resident is null)
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"UNASSIGN {resident.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.UnassignBedResident,
+                    TargetPokemonId: resident.PokemonId));
+            }
+
+            bool bedFull = BuildingWorkerHelpers.IsBedFull(building);
             foreach (SpawnedPokemon pokemon in spawnedPokemon)
             {
                 if (!pokemon.IsFollowingPlayer)
                 {
+                    continue;
+                }
+
+                if (bedFull && !BuildingWorkerHelpers.HasBedResident(building, pokemon.PokemonId))
+                {
+                    options.Add(new PokemonDialogueOption(
+                        "THIS BED IS FULL",
+                        PokemonDialogueAction.None,
+                        "THIS BED IS FULL"));
                     continue;
                 }
 
@@ -109,19 +131,6 @@ internal static class BuildingDialogueService
             foreach (SpawnedPokemon pokemon in spawnedPokemon)
             {
                 if (!pokemon.IsFollowingPlayer)
-                {
-                    continue;
-                }
-
-                if (!isBuildingExitWithinBedRange(pokemon, building))
-                {
-                    options.Add(new PokemonDialogueOption(
-                        $"{pokemon.Name.ToUpperInvariant()} BED TO FAR.",
-                        PokemonDialogueAction.None));
-                    continue;
-                }
-
-                if (!canAssignToResourceBuilding(pokemon, building))
                 {
                     continue;
                 }

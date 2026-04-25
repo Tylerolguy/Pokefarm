@@ -1,19 +1,339 @@
-Crafting time
-ditto can use skills
-construction
-chests
-saving
-Pc
-pc quests
-pc starts loaded in
-pokemon amount limits
-farm level
+Buildings
+- a building is a type of item that can be placed
+- buildings are crafted via recipes in crafting tables or aquired as rewards
+- some buildings start on the map
+- buildings may have collosion
+- buildings can be stored in chests or inventory
+- places a building allows for the building to be constrcuted by bringing pokemon that can construct building
+    this is the only skill that does not need pokemon to be in range for (see skilled jobs down below)
+- once a building is finished being completed, it can be interacted with to use its functions
+- many different categories of buildings, such as resource buildings, bed, and pc
+- when talking to a building, ditto icon will appear for the icon, and ponder what should i do with
+    this <building name>. with the options depending on the building
 
+
+Construction
+- buildings require to be constructed in order to fully be placed down.
+- the default construction skill is construction, but sometimes other skills will also be needed likes
+    watering for a fountain
+- a construction site has no limit on the amount of pokemon that can work there
+- a construction site requires all needed skills to be present before construction can happen
+- all pokemon will add there valid skills to the construction effort
+- any claimed pokemon can work on the construction regardless of bed zones
+- while a pokemon is construction its icon will be on the building and it will be despawned from the map
+- the completed effort will be displayed and update as more effort is added
+- each building has its own amount of effort needed with better buildings needing more effort typically
+- once the building is finished pokemon will be spawned in the exit zone of the construction site
+- construction sites have an exit zone like resource buildings
+
+
+Beds/Claiming pokemon
+  - there is a limit to the amount of beds that can be on a farm (raised with player level)
+  - a pokemon is unclaimed if it has no bed. it can do anything except be asked to follow to a bed or pc
+  - a bed can be assigned to a pokemon if that pokemon likes that type of bed (implement later)
+  - While assigned to a bed, a pokemon has a certain range it will wander around in depending on type of bed
+      with better beds giving more wander range
+  - A bed has a limit to the amount of pokemon that can be assigned there. if trying to assign a pokemon  
+      to a full bed, a message informs you that the bed is full.
+  - If a bed has room to assign a pokemon it will allow you to assign it and let you know the pokemon 
+      lives here
+  - Beds are a type of building that have collosion, can be built at a respective crafting table for materials
+      with the recipe being more difficult for the status of the bed (holds more pokemon, more range, or
+      more skilled pokemon)
+  - if a bed is removed from the world, all pokemon that lived there will become unclaimed
+  - Pokemon can only have 1 bed, but some beds can have multiple pokemon
+  - to unassign a pokemon from the bed, talking to the bed should have the option to unassign the pokemon
+      in addition to assigning a pokemon to a new bed will remove it from the old bed and have the new bed
+      be its home
+  - when talking to a bed, options should include bye, unassign for each pokemon that lives at that location,
+      assign <pokemon that is actively following> for each pokemon following. If trying to assign a pokemon
+      while the bed has full capacity, it should say, this bed is full. if a pokemon is removed or added
+      it should let that player know it happen successfully
+  - beds will have a message about who lives at the bed when the player is nearbby to see if beds are occupied
+
+
+
+Resource Buildings
+ - a resource building is a type of building that produces some sort of resource. there are multiple of resource
+    building categories
+ - resource buildings require a pokemon to work at the building to produce said resource. different resource
+   buildings and resources have different skills required. should only accept valid skills to work
+ - each resource has a different effort load, that is required to produce the resource
+ - while a pokemon is actively working in the resource building, it adds its respective skill to do effort every 
+    second
+ - if multiple pokemon are assigned to a resource building, they will all add its respective skill to do the
+    effort done.
+  - while a pokemon is actively working, they should be despawned off the map
+  - when a pokemon switches from actively working to not working, they should spawn/despawn at a exit zone
+    which does require non collosion from buildings to ensure pokemon can be spawned without getting stuck
+    in buildings
+  - to assign a pokemon to a resource building, a pokemon must be following the player and the building
+      exit/entrance must be in the pokemon's bed range. 
+  - some RB can have multiple assigned pokemon to them, but some can only have 1
+  - a pokemon will choose when it works based on its information detailed in the pokmeon section, when it 
+      chooses to work it will work until it desires to leave, or until the building has full inventory/
+      no work.
+  - resources buildings can hold up to a certain amount of produced resources
+  - resources buildings should reflect the amount of work progress done on producing a resource and show 
+      when the capacity is full
+  - when a pokemon is assigned to a building, we should see the icon at the bottom of the building
+  - talking to a resource building may have some options detailed in their section, but generally
+      it should have options bye, assign pokemon (for each following pokemon), unassign pokemon (for each
+      currently assigned), collect resource (which takes all of the produced resources). assigning pokemon
+      will fail and give a message for the respective issues, bed is to far, pokemon does not have required 
+      skill, pokemon does not have high enough skill level (skills may match but not be the high enough level).
+      if none of those objections happen the pokemon should be successfully assigned and be given that message
+  - unassign a pokemon via the dialogue option, should safely remove a pokemon from the assigned pokemon. 
+      removing its icon from the bottom, and if the pokemon is currently working it is placed at the exit
+
+  - pickup resources (which should be first dialogue option), should remove resources from the inventory of
+      the building and add them to the inventory of the player. if the player has a full inventory, it 
+      should not do that and instead let the player know that their inventory is full
+
+
+Farm
+ - farm is a type of resource building. there is different levels of farm but they will follow this guideline
+ - farms are used to produce berries. 
+ - each farm has a different list of berries that can be grown. the player will have to unlock each berry as
+    well before it can be grown. (so basic farm can grow oran berry and maybe sitrus berry, but will require
+    that player have the sitrus berry recipe to grow that even though the farm works for it)
+  - each farm will also be able to have the no berry option.
+  - the player will select what berry should be actively grown from a berry menu, with different berries 
+      requiring different skills and efforts
+  - if no berry is set (which should be the default), then no berry should be growing on the farm
+  - if the player changes berries mid effort, it should set the current effort to 0 and the current skill 
+      to planting
+  - to produce a berry (unless specific cases), the building will have to go through planting effort, then
+      watering effort, then harvesting effort. once all 3 have been completed, one berry will be completed.
+  - each production stage shoudl have different indicators for what stage of the production we are on
+ - farms are required to have minimum of 3 spaces for pokemon to work (unless a very special type of farm)
+
+Crafting
+- interacting with a crafting building will bring up the crafting ui. 
+- different crafting buildings have a queue limit, a storage, in addition to normal resource building rules
+-  ditto can queue as many items to be crafted as the queue limit allows. 
+- when an item is finished it is placed in storage. when storage is full, no work will be done until  
+    the storage has spaces
+- pokemon can be assigned like a normal resource building, this works like the other resource buildings
+    other then needing items to be selected for what work to be done.
+
+Player
+  - the player should be represented with the ditto model.
+  - the player should be able to move around at a certain speed which can be upgraded, or enhanced
+  - the player should be able to access there inventory by pressing i, allowing them to move around in it
+      and see what items they have
+  - the inventory should have a limit which can be upgraded
+  - the player should be able to place buildings down from the inventory
+  - the player should be able to talk to pokemon with q, and interact with buildings with each
+  - the player should be able to pick up building with u
+  - the player should be able to talk to pokemon and have them follow them
+  - the player should be able to interact with resource buildings to give its effort value if player has the skill
+  - the player should be able to unlock and level up skills
+  - the player should be able to craft at a crafting working bench
+  - the player should be able to help construct buildings
+
+
+Pokemon
+  - the player should be able to have pokemon in their farm
+  - there should be a limti to the amount of pokemon on the farm due to the limit of beds
+  - pokemon have a name, a list of skills, an icon, and a pokemon model
+  - pokemon should be unique
+  - pokemon can be in 2 states, claimed or unclaimed. when a pokemon is claimed it has a bed location
+  - pokemon can have a couple more states if they are claimed, no job, has a job but not working, and working
+  - if a pokemon has no job, it will wander around in its bed range (determined by type of bed)
+  - if a pokemon has a job but not working it will also wander around in its bed range
+  - if a pokemon is working, it will not appear on a map
+  - when a pokemon switched to working, it will path find to the entrance of its job and when it gets there
+      it will despawn from the map and work at the building
+  - when a pokemon switches to no job or no working, if it was actively working it will spawn at the exit of
+      building
+  - pokemon can also be asked to follow the player in which they will path find toward the player.
+  - when a pokemon is claimed they have dialogue bye, how are you doing, check skills, and follow me. they
+      will start the convo with Hi Ditto
+    - follow me will cause the pokemon to follow the player
+    - check skills will have the pokemon list what skills they have with their level
+    - how are you doing will respond with im good how are you
+    - bye will end then conversation
+  - unclaimed pokemon will have an exclaimation above their head.
+  - talking to a unclaimed pokemon will have dialogue, bye, check skills, and find a bed. the pokemon
+      will start the convo with I would love to move in here.
+      - bye ends the convo
+      - check skills will have the pokemon list the skills it has
+      - find a bed will put the pokemon in follow mode but not allow for the pokemon to move
+  - when an unclaimed pokemon is in follow mode, they should not be allowed to be assigned to anything
+      but a bed or placed in PC. 
+  - when a unclaimed pokemon is given a bed (becoming claimed), it should immediately walk to the bed.
+
+ - pokemon happiness like stardew with quests
+
+
+dialogue
+- when the player begins dialogue mode by interactivng with an pokemon or building they should lose control of
+    moving their character. the screen should move up and a dialogue box should appear at the bottom. the
+    icon of the pokemon they player is talking to should be on the left side, the middle should have what
+    the pokemon sees, and the right side should have options the player can select between.
+- When a player talks to abuilding it should use ditto for the icon
+- the options should display 3 options (if there are that much or more). if there are more then 3 options
+    the player should only see 3, but have arrows indicate if the other options are above or below the
+    existing options with inputs to move the options list down and up
+
+
+Inverntory
+- pressing I should open up the inventory. 
+- the inventory should display 8 items that the player has, if there are more then 8 items, the
+    inventroy should have arrows to indicate that there are more then 8 items and moving in the direction
+    of the arrow should move the items
+- items should have the amount of items indicated was well as there name
+- selecting a placeable item should enter placement mode with that item selected
+- pressing I exits placement mode
+
+
+Placement mode
+- while in placement mode, ditto should not be able to move around. 
+- a preview of the item should be shown to ditto
+- the preview of the item can be moved around but must stay within a certain distance of ditto
+- pressing I exits placement mode and brings back up the inventory
+- Items have collosion and should not be allowed to be placed on existing items or pokemon
+- after the item is placed, ditto should exit placement mode and just return to normal
+- placing an item puts it in a construction state, where it needs to be constructed to fully 
+    be placed down
+
+
+pickup mode
+
+
+Pokesnacks 
+ - Pokesnacks are an item that can be placed
+ - a pokesnack has a different spawn pool for each one although overlap may happen
+ - each pokesnack has a timer
+ - when a pokesnack is placed down, the timer will count down and when it reaches 0 it will despawn
+ - when a pokesnack despawns, it will pick a random pokemon from its weighted spawn pool and spawn
+    an unclaimed version of that pokemon in
+ - pokesnacks are a craftable item
+
+
+
+Music
+- Music should play on startup
+
+
+Pc
+- the player should have a starting PC in there world.
+- the player should be able to interact with the pc. 
+- the PC should have options of accessing quests, acssing level, store following pokemon, and   
+    access stored PC, and save
+    - access level should bring up level ui
+    - access quests should bring up quests ui 
+    - access PC should bring up the stored pokemon ui
+    - deposit Pokemon should be an option for each following pokemon and it should remove a spawned pokemon
+        from the world (wether claimed or unclaimed) and add it to the pc
+    - saving should save the game
+
+
+
+Stored Pokemon (pc)
+- the stored pokemon pc shows a list of stored pokemon. the ui interface is blue
+- the icons should be displayed of the pokemon that are stored
+- the player should be able to select pokemon to release them from storage.
+- when a pokemon is released, it should be placed nearby in an unclaimed state
+- pokemon that are on the farm should have a section here as well, where ditto can also select them
+    to add them to a pc
+- selecting a pokemon should bring up a option with options of release, place on farm (or store for pokmeon
+    current out of the pc box)
+
+
+
+
+quests
+- the quests ui should be red and display all the quests the player currently has with progress
+    and some of the rewards (up to a certain number)
+- the player should be able to select a quest to pop up more details about it including all the rewards
+    description of the quests, who gave you the quest, and all things to do with the quests
+- quests should have objectives, a reward, and a giver
+- objectives can be things like collect these resources, or have so many pokemon claimed. 
+- rewards can be items, recipes, money, or xp, or friendship 
+- a giver can be a pokemon or the pc or from ditto 
+- ditto can have any number of quests but quests should not be repeatable so quests should store if they have
+    compeleted or the giver should store it because pokemon may give similar happiness quests.
+
+
+level
+- the level ui should be purple
+- dittos level should be reflected
+- maybe dittos skills should also be stored here
+- claimed pokemon should also be displayed here
+
+
+
+Dungeon Portal
+ -powered by psychic types
 
 dungeons
 
 
+chests
+- chests are building that is placed
+- when interacted with, they pull up the chest ui and is brown
+- the chest ui displays items stored in the chest and the players inventory
+- in the ui, player should be able to store items to the chest or take items from the chest to the inventory
+- if the players inventory or chest is full, they should not be able to recieve items and a message should shwp
+- different types of chest should be able to hold a different amount of items
+
+
+
+Tranporting
+- pokemon can have the transporting skill.
+- they can pick up items equal to the transporting amount and take it to a chest that has that item
+- they only take from exits from buildings that are in the range, but can find chests anywhere that have that item
+- if no item of that is in a chest that will place it in any chest.
+
+- maybe just have transport pokemon just place it near the nearest chest
+
+
+
+Ditto skills
+
+
+
+Saving
+- player should be able to save their game at the pc
+- when loading up the world they should be able to select their save file that they want to play
+    or load in a new game
+- should save as much info as can, inflcuding spawned pokemon, assignments, buildings palce, inventory, chests
+    quests, level and so on
+
+
+
+Start up screen
+- the start up screen should have the option to select a new save file which generates a new file to save 
+    a game to and the player should be allowed to name the file
+- the player should be allowed to select other existing save files by the names of the files
+
+
+DEV TOOLS
+
+
 
 tutorial
+
+
+
+
+Story
+
+
+
+
+
+
+
+
+ditto can use skills
+
+
+
+
+
+
 
 

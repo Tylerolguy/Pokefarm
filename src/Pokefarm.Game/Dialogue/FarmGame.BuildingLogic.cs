@@ -94,6 +94,14 @@ public sealed partial class FarmGame
 
         if (queuedRecipe is not null)
         {
+            if (!CanAddInventoryItems(queuedRecipe.Costs.Select(cost => cost.Item)))
+            {
+                _talkState.SetText("INVENTORY FULL");
+                _interactionMessage = "INVENTORY FULL";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return;
+            }
+
             foreach (RecipeCost cost in queuedRecipe.Costs)
             {
                 AddInventoryItem(cost.Item, cost.Quantity);
@@ -191,6 +199,19 @@ public sealed partial class FarmGame
             return;
         }
 
+        int bedIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (bedIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem bed = _placedItems[bedIndex];
+        if (IsBedFull(bed) && !HasBedResident(bed, pokemonId))
+        {
+            _talkState.SetText("THIS BED IS FULL");
+            return;
+        }
+
         int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
         if (pokemonIndex < 0)
         {
@@ -214,21 +235,43 @@ public sealed partial class FarmGame
         };
 
         ClearExistingBedForPokemon(pokemon.PokemonId);
-
-        int bedIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
-        if (bedIndex >= 0)
-        {
-            PlacedItem bed = _placedItems[bedIndex];
-            _placedItems[bedIndex] = bed with
-            {
-                ResidentPokemonName = pokemon.Name,
-                ResidentPokemonId = pokemon.PokemonId
-            };
-            _interactTarget = _placedItems[bedIndex];
-            _talkState.UpdateBuildingReference(_placedItems[bedIndex]);
-        }
+        _placedItems[bedIndex] = AddResidentToBed(_placedItems[bedIndex], pokemon);
+        _interactTarget = _placedItems[bedIndex];
+        _talkState.UpdateBuildingReference(_placedItems[bedIndex]);
 
         _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} MOVED IN";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Removes a resident from the active bed and sets that Pokemon back to unclaimed mode.
+    private void UnassignPokemonFromActiveBed(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Bed)
+        {
+            return;
+        }
+
+        int bedIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (bedIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem bed = _placedItems[bedIndex];
+        if (!HasBedResident(bed, pokemonId))
+        {
+            _talkState.SetText("POKEMON NOT IN THIS BED");
+            return;
+        }
+
+        _placedItems[bedIndex] = RemoveResidentFromBed(bed, pokemonId);
+        UnclaimPokemon(pokemonId);
+
+        _interactTarget = _placedItems[bedIndex];
+        _talkState.UpdateBuildingReference(_placedItems[bedIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[bedIndex]));
+        _talkState.SetText("POKEMON UNASSIGNED");
+        _interactionMessage = "POKEMON UNASSIGNED";
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
@@ -249,9 +292,10 @@ public sealed partial class FarmGame
         SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
         PlacedItem building = _talkState.ActiveBuilding;
 
-        if (!CanAssignPokemonToResourceBuilding(pokemon, building))
+        string? assignmentFailureReason = GetResourceAssignmentFailureReason(pokemon, building);
+        if (!string.IsNullOrEmpty(assignmentFailureReason))
         {
-            _talkState.SetText("THIS POKEMON CANT WORK HERE");
+            _talkState.SetText(assignmentFailureReason);
             return;
         }
 
@@ -371,6 +415,14 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (!CanAddInventoryItem(producedMaterial))
+        {
+            _talkState.SetText("INVENTORY FULL");
+            _interactionMessage = "INVENTORY FULL";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
         AddInventoryItem(producedMaterial, building.StoredProducedUnits);
         _placedItems[buildingIndex] = building with
         {
@@ -411,52 +463,68 @@ public sealed partial class FarmGame
         }
     }
 
-    // Central assignment gate: verifies skill, bed range, capacity, and pathing before allowing worker assignment.
-    private bool CanAssignPokemonToResourceBuilding(SpawnedPokemon pokemon, PlacedItem building)
+    // Computes and returns resource Assignment Failure Reason without mutating persistent game state.
+    private string? GetResourceAssignmentFailureReason(SpawnedPokemon pokemon, PlacedItem building)
     {
         if (!building.Definition.IsResourceProduction)
         {
-            return false;
+            return "THIS IS NOT A RESOURCE BUILDING";
         }
 
-        if (pokemon.HomePosition is not Vector2 homePosition)
+        if (pokemon.HomePosition is not Vector2)
         {
-            return false;
+            return "POKEMON NEEDS A BED";
         }
 
-        if (!PokemonHasSkillForBuilding(pokemon, building.Definition))
+        if (!IsBuildingExitWithinPokemonBedRange(pokemon, building))
         {
-            return false;
+            return "BED TOO FAR";
+        }
+
+        SkillType requiredSkill = building.Definition.RequiredSkill;
+        int requiredSkillLevel = Math.Max(1, building.Definition.RequiredSkillLevel);
+        if (requiredSkill != SkillType.None)
+        {
+            int pokemonSkillLevel = pokemon.GetSkillLevel(requiredSkill);
+            if (pokemonSkillLevel <= 0)
+            {
+                return $"{pokemon.Name.ToUpperInvariant()} NEEDS {requiredSkill.ToString().ToUpperInvariant()}";
+            }
+
+            if (pokemonSkillLevel < requiredSkillLevel)
+            {
+                return $"{pokemon.Name.ToUpperInvariant()} NEEDS {requiredSkill.ToString().ToUpperInvariant()} {requiredSkillLevel}";
+            }
         }
 
         if (pokemon.IsAssignedToWork || pokemon.IsWorking)
         {
-            return false;
+            return "THIS POKEMON ALREADY HAS A JOB";
         }
 
         if (GetWorkerPokemonIds(building).Count >= Math.Max(1, building.Definition.MaxWorkers))
         {
-            return false;
+            return "THIS BUILDING IS FULL";
         }
 
         if (HasWorker(building, pokemon.PokemonId))
         {
-            return false;
+            return "THIS POKEMON IS ALREADY ASSIGNED HERE";
         }
 
         Rectangle exitBounds = GetResourceBuildingExitBounds(building);
         if (exitBounds.IsEmpty)
         {
-            return false;
-        }
-
-        if (!IsBuildingExitWithinPokemonBedRange(pokemon, building))
-        {
-            return false;
+            return "NO VALID EXIT FOR THIS BUILDING";
         }
 
         int pokemonIndex = _spawnedDittos.FindIndex(candidate => candidate.PokemonId == pokemon.PokemonId);
-        return CanReachTargetAreaFromPosition(pokemon.Position, exitBounds, pokemonIndex);
+        if (!CanReachTargetAreaFromPosition(pokemon.Position, exitBounds, pokemonIndex))
+        {
+            return "NO PATH TO BUILDING EXIT";
+        }
+
+        return null;
     }
 
     // Uses the building exit point for range checks so workers can reliably travel between bed and job site.
@@ -475,13 +543,6 @@ public sealed partial class FarmGame
 
         Vector2 exitCenter = new(exitBounds.Center.X - (PlayerSize / 2f), exitBounds.Center.Y - (PlayerSize / 2f));
         return Vector2.DistanceSquared(homePosition, exitCenter) <= HomeWanderRadius * HomeWanderRadius;
-    }
-
-    // Validates required skill rules; buildings with `SkillType.None` accept any Pokemon.
-    private static bool PokemonHasSkillForBuilding(SpawnedPokemon pokemon, ItemDefinition buildingDefinition)
-    {
-        SkillType requiredSkill = buildingDefinition.RequiredSkill;
-        return requiredSkill == SkillType.None || pokemon.GetSkillLevel(requiredSkill) > 0;
     }
 
     // Resolves what item a building should output, including farm-specific crop overrides.

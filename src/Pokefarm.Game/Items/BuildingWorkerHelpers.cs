@@ -97,6 +97,107 @@ internal static class BuildingWorkerHelpers
         return workerNames;
     }
 
+    // Computes and returns bed resident Pokemon Ids without mutating persistent game state.
+    public static List<int> GetBedResidentPokemonIds(PlacedItem bed)
+    {
+        List<int> residentIds = [];
+        if (bed.ResidentPokemonId.HasValue)
+        {
+            residentIds.Add(bed.ResidentPokemonId.Value);
+        }
+
+        if (bed.ResidentPokemonId2.HasValue)
+        {
+            residentIds.Add(bed.ResidentPokemonId2.Value);
+        }
+
+        if (bed.ResidentPokemonId3.HasValue)
+        {
+            residentIds.Add(bed.ResidentPokemonId3.Value);
+        }
+
+        return residentIds;
+    }
+
+    // Computes and returns bed resident Pokemon Names without mutating persistent game state.
+    public static List<string> GetBedResidentPokemonNames(PlacedItem bed)
+    {
+        List<string> residentNames = [];
+        if (!string.IsNullOrEmpty(bed.ResidentPokemonName))
+        {
+            residentNames.Add(bed.ResidentPokemonName);
+        }
+
+        if (!string.IsNullOrEmpty(bed.ResidentPokemonName2))
+        {
+            residentNames.Add(bed.ResidentPokemonName2);
+        }
+
+        if (!string.IsNullOrEmpty(bed.ResidentPokemonName3))
+        {
+            residentNames.Add(bed.ResidentPokemonName3);
+        }
+
+        return residentNames;
+    }
+
+    // Checks whether bed has capacity available for another resident.
+    public static bool IsBedFull(PlacedItem bed)
+    {
+        int capacity = Math.Max(1, bed.Definition.BedCapacity);
+        return GetBedResidentPokemonIds(bed).Count >= capacity;
+    }
+
+    // Checks whether this Pokemon currently lives in the bed.
+    public static bool HasBedResident(PlacedItem bed, int pokemonId)
+    {
+        return bed.ResidentPokemonId == pokemonId ||
+               bed.ResidentPokemonId2 == pokemonId ||
+               bed.ResidentPokemonId3 == pokemonId;
+    }
+
+    // Adds a resident to the first available bed slot.
+    public static PlacedItem AddResidentToBed(PlacedItem bed, SpawnedPokemon pokemon)
+    {
+        if (!bed.ResidentPokemonId.HasValue)
+        {
+            return bed with { ResidentPokemonId = pokemon.PokemonId, ResidentPokemonName = pokemon.Name };
+        }
+
+        if (!bed.ResidentPokemonId2.HasValue)
+        {
+            return bed with { ResidentPokemonId2 = pokemon.PokemonId, ResidentPokemonName2 = pokemon.Name };
+        }
+
+        if (!bed.ResidentPokemonId3.HasValue)
+        {
+            return bed with { ResidentPokemonId3 = pokemon.PokemonId, ResidentPokemonName3 = pokemon.Name };
+        }
+
+        return bed;
+    }
+
+    // Removes a resident from whichever bed slot currently contains it.
+    public static PlacedItem RemoveResidentFromBed(PlacedItem bed, int pokemonId)
+    {
+        if (bed.ResidentPokemonId == pokemonId)
+        {
+            return bed with { ResidentPokemonId = null, ResidentPokemonName = null };
+        }
+
+        if (bed.ResidentPokemonId2 == pokemonId)
+        {
+            return bed with { ResidentPokemonId2 = null, ResidentPokemonName2 = null };
+        }
+
+        if (bed.ResidentPokemonId3 == pokemonId)
+        {
+            return bed with { ResidentPokemonId3 = null, ResidentPokemonName3 = null };
+        }
+
+        return bed;
+    }
+
     // Checks whether worker is currently true for the active world state.
     public static bool HasWorker(PlacedItem building, int pokemonId)
     {
