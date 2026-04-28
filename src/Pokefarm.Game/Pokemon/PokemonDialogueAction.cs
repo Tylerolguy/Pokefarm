@@ -23,6 +23,7 @@ internal enum PokemonDialogueAction
     OpenPcQuests,
     OpenPcLevel,
     OpenPcStorage,
+    SaveGame,
     OpenDungeonMenu,
     StorePokemonInPc,
     ReturnToBuildingDialogue,

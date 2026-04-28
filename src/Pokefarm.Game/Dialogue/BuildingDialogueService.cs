@@ -157,6 +157,7 @@ internal static class BuildingDialogueService
             options.Add(new PokemonDialogueOption("ACCESS QUESTS", PokemonDialogueAction.OpenPcQuests));
             options.Add(new PokemonDialogueOption("CHECK LEVEL", PokemonDialogueAction.OpenPcLevel));
             options.Add(new PokemonDialogueOption("ACCESS PC", PokemonDialogueAction.OpenPcStorage));
+            options.Add(new PokemonDialogueOption("SAVE GAME", PokemonDialogueAction.SaveGame));
 
             foreach (SpawnedPokemon pokemon in spawnedPokemon)
             {
