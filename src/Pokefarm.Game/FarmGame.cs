@@ -52,6 +52,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private const float InteractionMessageDuration = 2f;
     private const int SkillBuildingHealth = 3;
     private const float SkillBuildingDamageResetSeconds = 3f;
+    private const int DittoSkillSlotCount = 8;
     private const double SnackLifetimeSeconds = 2d;
     private const float SpawnedPokemonMoveDistance = 32f;
     private const float FollowStopDistance = 56f;
@@ -140,6 +141,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _playerIdleAnimationFrame;
     private int _selectedCraftingIndex;
     private int _selectedPcMenuIndex;
+    private int _selectedDittoSkillSlotIndex;
     private int _selectedDungeonIndex;
     private readonly TalkState _talkState = new();
     private readonly StoryManager _storyManager = new();
@@ -158,6 +160,12 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private bool _isChestSelectionOnChest = true;
     private int _selectedChestStorageIndex;
     private int _selectedChestInventoryIndex;
+    private int _playerLevel = 1;
+    private int _playerXp = 0;
+    private int _playerXpToNextLevel = 100;
+    private int _dittoLevel = 1;
+    private int _dittoXp = 0;
+    private int _dittoXpToNextLevel = 100;
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
     private float _dialogueTransition;

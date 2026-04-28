@@ -904,8 +904,19 @@ public sealed partial class FarmGame
 
         if (_activePcMenuScreen == PcMenuScreen.Level)
         {
-            DrawPixelText("DITTO SKILLS", new Vector2(panel.X + 24, panel.Y + 58), new Color(236, 220, 196));
-            DrawPixelText("MORE SKILLS COMING", new Vector2(panel.X + 24, panel.Y + 86), new Color(210, 190, 164));
+            DrawPixelText($"DITTO LV {_dittoLevel}", new Vector2(panel.X + 24, panel.Y + 58), new Color(236, 220, 196));
+            DrawPixelText($"PLAYER LV {_playerLevel}", new Vector2(panel.X + 220, panel.Y + 58), new Color(210, 190, 164));
+
+            Rectangle xpBarOuter = new(panel.X + 24, panel.Y + 82, panel.Width - 48, 18);
+            Rectangle xpBarInner = new(xpBarOuter.X + 2, xpBarOuter.Y + 2, xpBarOuter.Width - 4, xpBarOuter.Height - 4);
+            float xpRatio = _dittoXpToNextLevel <= 0 ? 0f : MathHelper.Clamp(_dittoXp / (float)_dittoXpToNextLevel, 0f, 1f);
+            Rectangle xpFill = new(xpBarInner.X, xpBarInner.Y, (int)(xpBarInner.Width * xpRatio), xpBarInner.Height);
+            _spriteBatch.Draw(_pixel, xpBarOuter, new Color(46, 36, 31));
+            DrawPanelBorder(xpBarOuter, new Color(120, 90, 65));
+            _spriteBatch.Draw(_pixel, xpBarInner, new Color(34, 27, 22));
+            _spriteBatch.Draw(_pixel, xpFill, new Color(84, 166, 255));
+            DrawPixelText($"XP {_dittoXp}/{_dittoXpToNextLevel}", new Vector2(panel.X + 24, panel.Y + 104), new Color(210, 190, 164));
+            DrawPixelText($"PLAYER XP {_playerXp}/{_playerXpToNextLevel}", new Vector2(panel.X + 260, panel.Y + 104), new Color(210, 190, 164));
 
             (string Label, int Level)[] unlockedSkills =
             [
@@ -913,13 +924,13 @@ public sealed partial class FarmGame
                 ("ROCK SMASH", GetDittoSkillLevel(SkillType.RockSmash))
             ];
 
-            const int skillSlotCount = 8;
+            const int skillSlotCount = DittoSkillSlotCount;
             const int columns = 4;
             const int slotWidth = 154;
             const int slotHeight = 86;
             const int slotGap = 10;
             int startX = panel.X + 24;
-            int startY = panel.Y + 116;
+            int startY = panel.Y + 132;
 
             for (int index = 0; index < skillSlotCount; index++)
             {
@@ -932,8 +943,9 @@ public sealed partial class FarmGame
                     slotHeight);
 
                 bool unlocked = index < unlockedSkills.Length;
+                bool selected = index == _selectedDittoSkillSlotIndex;
                 _spriteBatch.Draw(_pixel, slotBounds, unlocked ? new Color(58, 43, 33) : new Color(46, 36, 31));
-                DrawPanelBorder(slotBounds, unlocked ? new Color(120, 90, 65) : new Color(88, 70, 58));
+                DrawPanelBorder(slotBounds, selected ? Color.Gold : unlocked ? new Color(120, 90, 65) : new Color(88, 70, 58));
 
                 if (unlocked)
                 {
@@ -947,7 +959,9 @@ public sealed partial class FarmGame
                 }
             }
 
-            DrawPixelText("PRESS E TO CLOSE", new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
+            string selectedSkillDescription = GetDittoSkillDescription(_selectedDittoSkillSlotIndex);
+            DrawPixelText(selectedSkillDescription, new Vector2(panel.X + 24, panel.Bottom - 62), new Color(210, 190, 164));
+            DrawPixelText("WASD MOVE  E CLOSE", new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
             return;
         }
 
@@ -1072,6 +1086,17 @@ public sealed partial class FarmGame
         }
 
         return [];
+    }
+
+    // Computes and returns the detail text shown for the selected Ditto skill slot.
+    private static string GetDittoSkillDescription(int skillSlotIndex)
+    {
+        return skillSlotIndex switch
+        {
+            0 => "CUT: USE ON BUILDINGS TO DEAL 1 DAMAGE PER E PRESS.",
+            1 => "ROCK SMASH: BREAK BUILDINGS TO RECOVER THEM AS ITEMS.",
+            _ => "LOCKED SKILL SLOT: FUTURE PROGRESSION UNLOCK.",
+        };
     }
 
     // Draws one row in the PC storage list, including icon and section label for boxed vs on-farm Pokemon.

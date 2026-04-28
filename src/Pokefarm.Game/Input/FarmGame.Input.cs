@@ -1438,6 +1438,7 @@ public sealed partial class FarmGame
 
         _activePcMenuScreen = screen;
         _selectedPcMenuIndex = 0;
+        _selectedDittoSkillSlotIndex = 0;
         _isPcStorageActionMenuOpen = false;
         _selectedPcStorageActionIndex = 0;
         _inputMode = InputMode.PcMenu;
@@ -1449,6 +1450,7 @@ public sealed partial class FarmGame
     {
         _inputMode = InputMode.Gameplay;
         _selectedPcMenuIndex = 0;
+        _selectedDittoSkillSlotIndex = 0;
         _isPcStorageActionMenuOpen = false;
         _selectedPcStorageActionIndex = 0;
         _activePcIndex = -1;
@@ -1457,6 +1459,37 @@ public sealed partial class FarmGame
     // Ticks pc Menu Navigation each frame and keeps related timers and state synchronized.
     private void UpdatePcMenuNavigation(bool moveUp, bool moveDown, bool moveLeft, bool moveRight)
     {
+        if (_activePcMenuScreen == PcMenuScreen.Level)
+        {
+            const int columns = 4;
+            const int rows = 2;
+            int currentRow = _selectedDittoSkillSlotIndex / columns;
+            int currentColumn = _selectedDittoSkillSlotIndex % columns;
+
+            if (moveLeft && currentColumn > 0)
+            {
+                _selectedDittoSkillSlotIndex--;
+            }
+
+            if (moveRight && currentColumn < columns - 1)
+            {
+                _selectedDittoSkillSlotIndex++;
+            }
+
+            if (moveUp && currentRow > 0)
+            {
+                _selectedDittoSkillSlotIndex -= columns;
+            }
+
+            if (moveDown && currentRow < rows - 1)
+            {
+                _selectedDittoSkillSlotIndex += columns;
+            }
+
+            _selectedDittoSkillSlotIndex = Math.Clamp(_selectedDittoSkillSlotIndex, 0, DittoSkillSlotCount - 1);
+            return;
+        }
+
         if (_activePcMenuScreen == PcMenuScreen.Storage && _isPcStorageActionMenuOpen)
         {
             List<string> actionOptions = GetSelectedPcStorageEntryActions();
