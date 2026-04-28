@@ -308,7 +308,7 @@ public sealed partial class FarmGame
     // Draws bed Home Range for the current frame using the active render context.
     private void DrawBedHomeRange(PlacedItem bed)
     {
-        if (_spriteBatch is null || _circleTexture is null)
+        if (_spriteBatch is null || _pixel is null || _circleTexture is null)
         {
             return;
         }
@@ -322,7 +322,41 @@ public sealed partial class FarmGame
             diameter);
 
         _spriteBatch.Draw(_circleTexture, rangeBounds, new Color(84, 166, 255, 46));
-        DrawPanelBorder(rangeBounds, new Color(84, 166, 255, 168));
+        DrawCirclePerimeter(
+            new Vector2(bed.Bounds.Center.X, bed.Bounds.Center.Y),
+            radius,
+            thickness: 3,
+            new Color(20, 44, 72, 190));
+    }
+
+    // Draws a circular perimeter ring without a rectangular fallback border.
+    private void DrawCirclePerimeter(Vector2 center, int radius, int thickness, Color color)
+    {
+        if (_spriteBatch is null || _pixel is null || radius <= 0 || thickness <= 0)
+        {
+            return;
+        }
+
+        int innerRadius = Math.Max(0, radius - thickness + 1);
+        int outerRadiusSquared = radius * radius;
+        int innerRadiusSquared = innerRadius * innerRadius;
+
+        for (int y = -radius; y <= radius; y++)
+        {
+            for (int x = -radius; x <= radius; x++)
+            {
+                int distanceSquared = (x * x) + (y * y);
+                if (distanceSquared > outerRadiusSquared || distanceSquared < innerRadiusSquared)
+                {
+                    continue;
+                }
+
+                _spriteBatch.Draw(
+                    _pixel,
+                    new Rectangle((int)center.X + x, (int)center.Y + y, 1, 1),
+                    color);
+            }
+        }
     }
 
     // Draws resource Exit Marker for the current frame using the active render context.
@@ -530,21 +564,32 @@ public sealed partial class FarmGame
                 idleFrame: pokemon.IsMoving ? 0 : pokemon.IdleAnimationFrame);
             if (_isHitboxDisplayMode)
             {
-                DrawPokemonHitbox(pokemon);
+                DrawPokemonHitbox(
+                    pokemon,
+                    pokemon.Direction,
+                    isWalking: false,
+                    walkFrame: 0,
+                    idleFrame: pokemon.IsMoving ? 0 : pokemon.IdleAnimationFrame);
             }
             DrawStatusMarker(pokemon);
         }
     }
 
     // Draws pokemon Hitbox for the current frame using the active render context.
-    private void DrawPokemonHitbox(SpawnedPokemon pokemon)
+    private void DrawPokemonHitbox(SpawnedPokemon pokemon, Direction direction, bool isWalking, int walkFrame, int idleFrame)
     {
         if (_spriteBatch is null || _pixel is null)
         {
             return;
         }
 
-        Rectangle hitbox = new((int)pokemon.Position.X, (int)pokemon.Position.Y, PlayerSize, PlayerSize);
+        Rectangle hitbox = GetPokemonHitbox(
+            pokemon.Position,
+            pokemon.Name,
+            direction,
+            isWalking,
+            walkFrame,
+            idleFrame);
         _spriteBatch.Draw(_pixel, hitbox, new Color(220, 56, 56, 42));
         DrawPanelBorder(hitbox, new Color(220, 56, 56, 210));
     }
@@ -1323,6 +1368,29 @@ public sealed partial class FarmGame
             ? _playerIdleAnimationFrame
             : 0;
         DrawPokemonAt(_playerPosition, PlayerPokemonName, _playerDirection, isWalking, _walkAnimationFrame, idleFrame);
+        if (_isHitboxDisplayMode)
+        {
+            DrawPlayerHitbox(_playerDirection, isWalking, _walkAnimationFrame, idleFrame);
+        }
+    }
+
+    // Draws the player hitbox when hitbox-display mode is enabled.
+    private void DrawPlayerHitbox(Direction direction, bool isWalking, int walkFrame, int idleFrame)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Rectangle hitbox = GetPokemonHitbox(
+            _playerPosition,
+            PlayerPokemonName,
+            direction,
+            isWalking,
+            walkFrame,
+            idleFrame);
+        _spriteBatch.Draw(_pixel, hitbox, new Color(56, 156, 236, 42));
+        DrawPanelBorder(hitbox, new Color(56, 156, 236, 210));
     }
 
     // Draws pokemon At for the current frame using the active render context.
@@ -1371,9 +1439,10 @@ public sealed partial class FarmGame
         float scale = PlayerRenderSize / (float)PlayerSpriteCanvasSize;
         int renderX = (int)topLeftPosition.X;
         int renderY = (int)topLeftPosition.Y + PlayerSize - (int)MathF.Round(PlayerSpriteCanvasSize * scale);
+        int resolvedOffsetX = ResolveFrameOffsetX(frames, frame, direction, isWalking);
 
         Rectangle destination = new(
-            renderX + (int)MathF.Round(frame.OffsetX * scale),
+            renderX + (int)MathF.Round(resolvedOffsetX * scale),
             renderY + (int)MathF.Round(frame.OffsetY * scale),
             (int)MathF.Round(frame.Source.Width * scale),
             (int)MathF.Round(frame.Source.Height * scale));

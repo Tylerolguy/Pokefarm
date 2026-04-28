@@ -762,16 +762,24 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             return false;
         }
 
-        Rectangle playerBounds = new(
-            (int)playerTopLeft.X,
-            (int)playerTopLeft.Y,
-            PlayerSize,
-            PlayerSize);
-        Rectangle currentPlayerBounds = new(
-            (int)_playerPosition.X,
-            (int)_playerPosition.Y,
-            PlayerSize,
-            PlayerSize);
+        bool playerIsWalking = _playerMovement != Vector2.Zero;
+        int playerIdleFrame = !playerIsWalking && _playerIdleStationaryTimer >= PlayerIdleStartDelaySeconds
+            ? _playerIdleAnimationFrame
+            : 0;
+        Rectangle playerBounds = GetPokemonHitbox(
+            playerTopLeft,
+            PlayerPokemonName,
+            _playerDirection,
+            playerIsWalking,
+            _walkAnimationFrame,
+            playerIdleFrame);
+        Rectangle currentPlayerBounds = GetPokemonHitbox(
+            _playerPosition,
+            PlayerPokemonName,
+            _playerDirection,
+            playerIsWalking,
+            _walkAnimationFrame,
+            playerIdleFrame);
 
         foreach (PlacedItem item in _placedItems)
         {
@@ -788,19 +796,22 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
-            Rectangle dittoBounds = new(
-                (int)ditto.Position.X,
-                (int)ditto.Position.Y,
-                PlayerSize,
-                PlayerSize);
+            Rectangle dittoBounds = GetPokemonHitbox(
+                ditto.Position,
+                ditto.Name,
+                ditto.Direction,
+                isWalking: false,
+                walkFrame: 0,
+                idleFrame: ditto.IsMoving ? 0 : ditto.IdleAnimationFrame);
 
             if (playerBounds.Intersects(dittoBounds))
             {
                 if (currentPlayerBounds.Intersects(dittoBounds))
                 {
-                    // If Ditto is already overlapping this Pokemon, temporarily ignore it
-                    // so the player can step out instead of getting trapped.
-                    continue;
+                    if (IsMovingAwayFromOverlap(currentPlayerBounds, playerBounds, dittoBounds))
+                    {
+                        continue;
+                    }
                 }
 
                 return true;
@@ -1249,8 +1260,31 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     // Handles collides With Spawned Pokemon for this gameplay subsystem.
     private bool CollidesWithSpawnedPokemon(Rectangle candidateBounds, int currentPokemonIndex)
     {
-        Rectangle playerBounds = new((int)_playerPosition.X, (int)_playerPosition.Y, PlayerSize, PlayerSize);
-        if (candidateBounds.Intersects(playerBounds))
+        Rectangle resolvedCandidateBounds = candidateBounds;
+        if (currentPokemonIndex >= 0 && currentPokemonIndex < _spawnedDittos.Count)
+        {
+            SpawnedPokemon movingPokemon = _spawnedDittos[currentPokemonIndex];
+            resolvedCandidateBounds = GetPokemonHitbox(
+                new Vector2(candidateBounds.X, candidateBounds.Y),
+                movingPokemon.Name,
+                movingPokemon.Direction,
+                isWalking: false,
+                walkFrame: 0,
+                idleFrame: movingPokemon.IsMoving ? 0 : movingPokemon.IdleAnimationFrame);
+        }
+
+        bool playerIsWalking = _playerMovement != Vector2.Zero;
+        int playerIdleFrame = !playerIsWalking && _playerIdleStationaryTimer >= PlayerIdleStartDelaySeconds
+            ? _playerIdleAnimationFrame
+            : 0;
+        Rectangle playerBounds = GetPokemonHitbox(
+            _playerPosition,
+            PlayerPokemonName,
+            _playerDirection,
+            playerIsWalking,
+            _walkAnimationFrame,
+            playerIdleFrame);
+        if (resolvedCandidateBounds.Intersects(playerBounds))
         {
             return true;
         }
@@ -1268,19 +1302,127 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
-            Rectangle pokemonBounds = new(
-                (int)pokemon.Position.X,
-                (int)pokemon.Position.Y,
-                PlayerSize,
-                PlayerSize);
+            Rectangle pokemonBounds = GetPokemonHitbox(
+                pokemon.Position,
+                pokemon.Name,
+                pokemon.Direction,
+                isWalking: false,
+                walkFrame: 0,
+                idleFrame: pokemon.IsMoving ? 0 : pokemon.IdleAnimationFrame);
 
-            if (candidateBounds.Intersects(pokemonBounds))
+            if (resolvedCandidateBounds.Intersects(pokemonBounds))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    // Computes and returns the same sprite-aligned bounds used by hitbox display, falling back to logical bounds when data is unavailable.
+    private Rectangle GetPokemonHitbox(
+        Vector2 topLeftPosition,
+        string pokemonName,
+        Direction direction,
+        bool isWalking,
+        int walkFrame,
+        int idleFrame)
+    {
+        if (!TryGetPokemonSpriteData(pokemonName, out Texture2D? spriteSheet, out Dictionary<string, SpriteFrame>? frames) ||
+            spriteSheet is null ||
+            frames is null)
+        {
+            return InsetHitbox(new Rectangle((int)topLeftPosition.X, (int)topLeftPosition.Y, PlayerSize, PlayerSize));
+        }
+
+        // Keep collision stable while idle so idle animation frame swaps cannot shift hitboxes.
+        int resolvedIdleFrame = isWalking ? idleFrame : 0;
+        SpriteFrame? frame = GetCurrentPlayerFrame(frames, direction, isWalking, walkFrame, resolvedIdleFrame);
+        if (frame is null)
+        {
+            return InsetHitbox(new Rectangle((int)topLeftPosition.X, (int)topLeftPosition.Y, PlayerSize, PlayerSize));
+        }
+
+        float scale = PlayerRenderSize / (float)PlayerSpriteCanvasSize;
+        int renderX = (int)topLeftPosition.X;
+        int renderY = (int)topLeftPosition.Y + PlayerSize - (int)MathF.Round(PlayerSpriteCanvasSize * scale);
+        int resolvedOffsetX = ResolveFrameOffsetX(frames, frame, direction, isWalking);
+        Rectangle rawBounds = new Rectangle(
+            renderX + (int)MathF.Round(resolvedOffsetX * scale),
+            renderY + (int)MathF.Round(frame.OffsetY * scale),
+            (int)MathF.Round(frame.Source.Width * scale),
+            (int)MathF.Round(frame.Source.Height * scale));
+
+        Rectangle stableBounds = BuildStableCollisionBounds(frames, rawBounds, scale);
+        return InsetHitbox(stableBounds);
+    }
+
+    // Insets sprite-aligned hitboxes by 2 pixels per side to reduce edge snagging.
+    private static Rectangle InsetHitbox(Rectangle hitbox)
+    {
+        const int inset = 2;
+        int width = Math.Max(1, hitbox.Width - (inset * 2));
+        int height = Math.Max(1, hitbox.Height - (inset * 2));
+        return new Rectangle(hitbox.X + inset, hitbox.Y + inset, width, height);
+    }
+
+    // Keeps directional walk frames anchored to the same X origin as idle when needed.
+    private static int ResolveFrameOffsetX(Dictionary<string, SpriteFrame> frames, SpriteFrame frame, Direction direction, bool isWalking)
+    {
+        if (isWalking && (direction == Direction.Down || direction == Direction.Up))
+        {
+            int directionIndex = direction == Direction.Down ? 0 : 4;
+            string idleKey = $"Normal/Idle/Anim/{directionIndex}/0000";
+            if (frames.TryGetValue(idleKey, out SpriteFrame? idleFrame))
+            {
+                return idleFrame.OffsetX;
+            }
+        }
+
+        return frame.OffsetX;
+    }
+
+    // Normalizes hitbox size across facings by using the smallest idle-frame footprint and anchoring at sprite bottom-center.
+    private static Rectangle BuildStableCollisionBounds(Dictionary<string, SpriteFrame> frames, Rectangle rawBounds, float scale)
+    {
+        int targetWidth = rawBounds.Width;
+        int targetHeight = rawBounds.Height;
+
+        string[] idleBaseKeys =
+        [
+            "Normal/Idle/Anim/0/0000", // Down
+            "Normal/Idle/Anim/2/0000", // Right
+            "Normal/Idle/Anim/4/0000", // Up
+            "Normal/Idle/Anim/6/0000", // Left
+        ];
+
+        foreach (string key in idleBaseKeys)
+        {
+            if (!frames.TryGetValue(key, out SpriteFrame? idleFrame))
+            {
+                continue;
+            }
+
+            int idleWidth = Math.Max(1, (int)MathF.Round(idleFrame.Source.Width * scale));
+            int idleHeight = Math.Max(1, (int)MathF.Round(idleFrame.Source.Height * scale));
+            targetWidth = Math.Min(targetWidth, idleWidth);
+            targetHeight = Math.Min(targetHeight, idleHeight);
+        }
+
+        int adjustedX = rawBounds.X + ((rawBounds.Width - targetWidth) / 2);
+        int adjustedY = rawBounds.Bottom - targetHeight;
+        return new Rectangle(adjustedX, adjustedY, targetWidth, targetHeight);
+    }
+
+    // Checks whether movement is reducing overlap pressure against another hitbox.
+    private static bool IsMovingAwayFromOverlap(Rectangle currentBounds, Rectangle candidateBounds, Rectangle otherBounds)
+    {
+        Vector2 currentCenter = new(currentBounds.Center.X, currentBounds.Center.Y);
+        Vector2 candidateCenter = new(candidateBounds.Center.X, candidateBounds.Center.Y);
+        Vector2 otherCenter = new(otherBounds.Center.X, otherBounds.Center.Y);
+        float currentDistanceSquared = Vector2.DistanceSquared(currentCenter, otherCenter);
+        float candidateDistanceSquared = Vector2.DistanceSquared(candidateCenter, otherCenter);
+        return candidateDistanceSquared > currentDistanceSquared;
     }
 
     // Computes and returns random Move Delay Seconds without mutating persistent game state.
