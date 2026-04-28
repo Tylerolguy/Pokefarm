@@ -53,6 +53,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private const int SkillBuildingHealth = 3;
     private const float SkillBuildingDamageResetSeconds = 3f;
     private const int DittoSkillSlotCount = 8;
+    private const float DayDurationSeconds = 450f;
+    private const float NightDurationSeconds = 300f;
     private const double SnackLifetimeSeconds = 2d;
     private const float SpawnedPokemonMoveDistance = 32f;
     private const float FollowStopDistance = 56f;
@@ -168,6 +170,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _dittoXpToNextLevel = 100;
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
+    private float _dayNightCycleTimerSeconds;
     private float _dialogueTransition;
     private float _talkExitTimer;
     private string? _interactionMessage;
@@ -359,6 +362,15 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         KeyboardState keyboard = Keyboard.GetState();
         float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
         _elapsedWorldTimeSeconds += gameTime.ElapsedGameTime.TotalSeconds;
+        if (_bootFlowState == BootFlowState.Playing)
+        {
+            _dayNightCycleTimerSeconds += deltaTime;
+            float fullCycleSeconds = DayDurationSeconds + NightDurationSeconds;
+            if (_dayNightCycleTimerSeconds >= fullCycleSeconds)
+            {
+                _dayNightCycleTimerSeconds %= fullCycleSeconds;
+            }
+        }
         _playerMovement = Vector2.Zero;
         bool inventoryPressed = keyboard.IsKeyDown(Keys.I) && !_previousKeyboard.IsKeyDown(Keys.I);
         bool confirmPressed = keyboard.IsKeyDown(Keys.Space) && !_previousKeyboard.IsKeyDown(Keys.Space);
@@ -687,6 +699,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         DrawPlayer();
+        DrawNightOverlay();
         _spriteBatch.End();
 
         _spriteBatch.Begin();

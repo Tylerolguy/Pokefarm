@@ -8,6 +8,23 @@ namespace Pokefarm.Game;
 // Main runtime type for farm Game, coordinating state and side effects for this feature.
 public sealed partial class FarmGame
 {
+    // Draws a subtle night tint over farm gameplay only (not UI/dialogue panels).
+    private void DrawNightOverlay()
+    {
+        if (_spriteBatch is null || _pixel is null || _activeDungeonRun is not null)
+        {
+            return;
+        }
+
+        if (_dayNightCycleTimerSeconds < DayDurationSeconds)
+        {
+            return;
+        }
+
+        Rectangle worldRect = new(0, 0, _worldBounds.Width, _worldBounds.Height);
+        _spriteBatch.Draw(_pixel, worldRect, new Color(8, 14, 28, 70));
+    }
+
     // Draws farm for the current frame using the active render context.
     private void DrawFarm()
     {

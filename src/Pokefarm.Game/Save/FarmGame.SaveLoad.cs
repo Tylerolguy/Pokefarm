@@ -418,7 +418,10 @@ public sealed partial class FarmGame
         _interactionMessage = null;
         _interactionMessageTimer = 0f;
         _talkState.Reset();
+        _storyManager.ResetForNewGame();
+        _activeStorySceneId = null;
         _elapsedWorldTimeSeconds = 0d;
+        _dayNightCycleTimerSeconds = 0f;
         _nextPokemonId = 1;
         _nextConstructionSiteId = 1;
         _isDittoWorking = false;
@@ -434,6 +437,7 @@ public sealed partial class FarmGame
             PlayerPositionY = _playerPosition.Y,
             PlayerDirection = _playerDirection,
             ElapsedWorldTimeSeconds = _elapsedWorldTimeSeconds,
+            DayNightCycleTimerSeconds = _dayNightCycleTimerSeconds,
             NextPokemonId = _nextPokemonId,
             NextConstructionSiteId = _nextConstructionSiteId,
             InventoryItems = _inventoryItems.Select(entry => new SavedInventoryEntry(entry.Definition.Name, entry.Quantity)).ToList(),
@@ -442,7 +446,8 @@ public sealed partial class FarmGame
             StoredPcPokemonNames = [.. _storedPcPokemonNames],
             ActiveQuests = _activeQuests.Select(quest => quest.Name).ToList(),
             AvailableDungeons = _availableDungeons.Select(dungeon => dungeon.Name).ToList(),
-            UnlockedRecipes = _unlockedRecipes.Select(recipe => recipe.Name).ToList()
+            UnlockedRecipes = _unlockedRecipes.Select(recipe => recipe.Name).ToList(),
+            TutorialStarted = _storyManager.TutorialStarted
         };
     }
 
@@ -536,6 +541,10 @@ public sealed partial class FarmGame
         _playerPosition = new Vector2(data.PlayerPositionX, data.PlayerPositionY);
         _playerDirection = data.PlayerDirection;
         _elapsedWorldTimeSeconds = data.ElapsedWorldTimeSeconds;
+        float fullCycleSeconds = DayDurationSeconds + NightDurationSeconds;
+        _dayNightCycleTimerSeconds = fullCycleSeconds <= 0f
+            ? 0f
+            : Math.Clamp(data.DayNightCycleTimerSeconds, 0f, fullCycleSeconds);
         _nextPokemonId = Math.Max(1, data.NextPokemonId);
         _nextConstructionSiteId = Math.Max(1, data.NextConstructionSiteId);
 
@@ -719,6 +728,9 @@ public sealed partial class FarmGame
             _unlockedRecipes.Add(RecipeCatalog.Bed);
             _unlockedRecipes.Add(RecipeCatalog.OranBerryPlant);
         }
+
+        _storyManager.LoadFlags(data.TutorialStarted);
+        _activeStorySceneId = null;
     }
 
     private static bool TryResolveItem(string? definitionName, out ItemDefinition definition)
@@ -745,6 +757,7 @@ internal sealed class GameSaveData
     public float PlayerPositionY { get; set; }
     public Direction PlayerDirection { get; set; } = Direction.Down;
     public double ElapsedWorldTimeSeconds { get; set; }
+    public float DayNightCycleTimerSeconds { get; set; }
     public int NextPokemonId { get; set; } = 1;
     public int NextConstructionSiteId { get; set; } = 1;
     public List<SavedInventoryEntry> InventoryItems { get; set; } = [];
@@ -754,6 +767,7 @@ internal sealed class GameSaveData
     public List<string> ActiveQuests { get; set; } = [];
     public List<string> AvailableDungeons { get; set; } = [];
     public List<string> UnlockedRecipes { get; set; } = [];
+    public bool TutorialStarted { get; set; }
 }
 
 internal sealed class SavedInventoryEntry
