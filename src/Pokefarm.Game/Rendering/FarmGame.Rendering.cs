@@ -904,41 +904,46 @@ public sealed partial class FarmGame
 
         if (_activePcMenuScreen == PcMenuScreen.Level)
         {
-            DrawPixelText("LEVEL 1", new Vector2(panel.X + 24, panel.Y + 58), new Color(236, 220, 196));
-            List<SpawnedPokemon> claimedPokemon = _spawnedDittos
-                .Where(pokemon => pokemon.IsClaimed)
-                .ToList();
+            DrawPixelText("DITTO SKILLS", new Vector2(panel.X + 24, panel.Y + 58), new Color(236, 220, 196));
+            DrawPixelText("MORE SKILLS COMING", new Vector2(panel.X + 24, panel.Y + 86), new Color(210, 190, 164));
 
-            if (claimedPokemon.Count == 0)
+            (string Label, int Level)[] unlockedSkills =
+            [
+                ("CUT", GetDittoSkillLevel(SkillType.Cut)),
+                ("ROCK SMASH", GetDittoSkillLevel(SkillType.RockSmash))
+            ];
+
+            const int skillSlotCount = 8;
+            const int columns = 4;
+            const int slotWidth = 154;
+            const int slotHeight = 86;
+            const int slotGap = 10;
+            int startX = panel.X + 24;
+            int startY = panel.Y + 116;
+
+            for (int index = 0; index < skillSlotCount; index++)
             {
-                DrawPixelText("NO CLAIMED POKEMON", new Vector2(panel.X + 24, panel.Y + 86), new Color(210, 190, 164));
-            }
-            else
-            {
-                DrawPixelText("CLAIMED TEAM", new Vector2(panel.X + 24, panel.Y + 86), new Color(210, 190, 164));
-                const int iconSize = 44;
-                const int iconPadding = 10;
-                int iconsPerRow = Math.Max(1, (panel.Width - 48) / (iconSize + iconPadding));
-                for (int index = 0; index < claimedPokemon.Count; index++)
+                int row = index / columns;
+                int column = index % columns;
+                Rectangle slotBounds = new(
+                    startX + (column * (slotWidth + slotGap)),
+                    startY + (row * (slotHeight + slotGap)),
+                    slotWidth,
+                    slotHeight);
+
+                bool unlocked = index < unlockedSkills.Length;
+                _spriteBatch.Draw(_pixel, slotBounds, unlocked ? new Color(58, 43, 33) : new Color(46, 36, 31));
+                DrawPanelBorder(slotBounds, unlocked ? new Color(120, 90, 65) : new Color(88, 70, 58));
+
+                if (unlocked)
                 {
-                    int row = index / iconsPerRow;
-                    int column = index % iconsPerRow;
-                    int iconX = panel.X + 24 + (column * (iconSize + iconPadding));
-                    int iconY = panel.Y + 108 + (row * (iconSize + iconPadding));
-                    Rectangle iconBounds = new(iconX, iconY, iconSize, iconSize);
-                    _spriteBatch.Draw(_pixel, iconBounds, new Color(58, 43, 33));
-                    DrawPanelBorder(iconBounds, new Color(120, 90, 65));
-
-                    SpawnedPokemon pokemon = claimedPokemon[index];
-                    if (TryGetPokemonIconTexture(pokemon.Name, out Texture2D? iconTexture) && iconTexture is not null)
-                    {
-                        Rectangle innerBounds = new(iconBounds.X + 4, iconBounds.Y + 4, iconBounds.Width - 8, iconBounds.Height - 8);
-                        _spriteBatch.Draw(iconTexture, innerBounds, Color.White);
-                    }
-                    else
-                    {
-                        DrawPixelText("?", new Vector2(iconBounds.X + 16, iconBounds.Y + 13), new Color(236, 220, 196));
-                    }
+                    (string skillLabel, int skillLevel) = unlockedSkills[index];
+                    DrawPixelText(skillLabel, new Vector2(slotBounds.X + 10, slotBounds.Y + 14), new Color(236, 220, 196));
+                    DrawPixelText($"LV {skillLevel}", new Vector2(slotBounds.X + 10, slotBounds.Y + 45), new Color(210, 190, 164));
+                }
+                else
+                {
+                    DrawPixelText("UNLOCKED LATER", new Vector2(slotBounds.X + 10, slotBounds.Y + 27), new Color(160, 140, 122));
                 }
             }
 
