@@ -50,6 +50,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private const int UiFontSpacing = 1;
     private const float InteractionRange = 18f;
     private const float InteractionMessageDuration = 2f;
+    private const int SkillBuildingHealth = 3;
+    private const float SkillBuildingDamageResetSeconds = 3f;
     private const double SnackLifetimeSeconds = 2d;
     private const float SpawnedPokemonMoveDistance = 32f;
     private const float FollowStopDistance = 56f;
@@ -140,6 +142,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _selectedPcMenuIndex;
     private int _selectedDungeonIndex;
     private readonly TalkState _talkState = new();
+    private readonly StoryManager _storyManager = new();
     private CraftingSource _activeCraftingSource = CraftingSource.HandheldCrafting;
     private int _activeWorkbenchIndex = -1;
     private int _activeFarmIndex = -1;
@@ -160,6 +163,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private float _dialogueTransition;
     private float _talkExitTimer;
     private string? _interactionMessage;
+    private SkillType _activeDittoSkill = SkillType.None;
+    private PlacedItem? _activeSkillDamageTarget;
+    private int _activeSkillDamageAmount;
+    private double _activeSkillDamageLastWorldTimeSeconds;
     private bool _isHitboxDisplayMode;
     private bool _isAssignmentFailureDialogueActive;
     private PlacedItem? _assignmentFailureReturnBuilding;
@@ -172,6 +179,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _dittoWorkDialogueDotCount;
     private int _nextPokemonId = 1;
     private int _nextConstructionSiteId = 1;
+    private StorySceneId? _activeStorySceneId;
     private BootFlowState _bootFlowState = BootFlowState.TitleScreen;
     private readonly List<string> _availableProfiles = [];
     private int _selectedProfileIndex;
@@ -349,6 +357,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         bool devPlacePressed = keyboard.IsKeyDown(Keys.Enter) && !_previousKeyboard.IsKeyDown(Keys.Enter);
         bool removeModePressed = keyboard.IsKeyDown(Keys.U) && !_previousKeyboard.IsKeyDown(Keys.U);
         bool interactPressed = keyboard.IsKeyDown(Keys.E) && !_previousKeyboard.IsKeyDown(Keys.E);
+        bool cycleSkillPressed = keyboard.IsKeyDown(Keys.C) && !_previousKeyboard.IsKeyDown(Keys.C);
         bool talkPressed = keyboard.IsKeyDown(Keys.Q) && !_previousKeyboard.IsKeyDown(Keys.Q);
         bool hitboxModePressed = keyboard.IsKeyDown(Keys.H) && !_previousKeyboard.IsKeyDown(Keys.H);
         bool moveLeftPressed = keyboard.IsKeyDown(Keys.A) && !_previousKeyboard.IsKeyDown(Keys.A);
@@ -375,6 +384,11 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         if (hitboxModePressed)
         {
             _isHitboxDisplayMode = !_isHitboxDisplayMode;
+        }
+
+        if (cycleSkillPressed && _inputMode == InputMode.Gameplay && _activeDungeonRun is null)
+        {
+            CycleDittoActiveSkill();
         }
 
         if (keyboard.IsKeyDown(Keys.Escape))
@@ -575,6 +589,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 {
                     AdvanceDungeonRoomOrExit();
                 }
+                else if (IsBuildingDamageSkillSelected())
+                {
+                    TryUseActiveSkillOnBuilding();
+                }
                 else
                 {
                     TryInteractWithBuilding();
@@ -603,6 +621,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         UpdateResourceProduction(deltaTime);
         UpdateWorkbenchCrafting(deltaTime);
         UpdateSpawnedPokemon(deltaTime);
+        UpdateActiveSkillBuildingDamageState();
         _interactTarget = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindInteractableTarget() : null;
         _talkTargetIndex = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindNearbyPokemonTargetIndex() : -1;
         if (_interactionMessageTimer > 0f)
@@ -2587,8 +2606,62 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             SkillType.Crafting => 1,
             SkillType.Cooking => 1,
             SkillType.Construction => 1,
+            SkillType.Cut => 1,
+            SkillType.RockSmash => 1,
             _ => 1
         };
+    }
+
+    // Cycles Ditto's active gameplay-only building skill between None, Cut, and Rock Smash.
+    private void CycleDittoActiveSkill()
+    {
+        _activeDittoSkill = _activeDittoSkill switch
+        {
+            SkillType.None => SkillType.Cut,
+            SkillType.Cut => SkillType.RockSmash,
+            _ => SkillType.None
+        };
+    }
+
+    // Computes and returns whether the active Ditto skill routes E input to building damage.
+    private bool IsBuildingDamageSkillSelected()
+    {
+        return _activeDittoSkill == SkillType.Cut || _activeDittoSkill == SkillType.RockSmash;
+    }
+
+    // Computes and returns active skill display label for UI and status prompts.
+    private string GetActiveSkillLabel()
+    {
+        return _activeDittoSkill switch
+        {
+            SkillType.Cut => "Cut",
+            SkillType.RockSmash => "Rock Smash",
+            _ => "None"
+        };
+    }
+
+    // Ticks active skill damage state and clears stale target damage after the timeout window.
+    private void UpdateActiveSkillBuildingDamageState()
+    {
+        if (_activeSkillDamageTarget is null)
+        {
+            return;
+        }
+
+        if (!_placedItems.Contains(_activeSkillDamageTarget))
+        {
+            _activeSkillDamageTarget = null;
+            _activeSkillDamageAmount = 0;
+            return;
+        }
+
+        if ((_elapsedWorldTimeSeconds - _activeSkillDamageLastWorldTimeSeconds) < SkillBuildingDamageResetSeconds)
+        {
+            return;
+        }
+
+        _activeSkillDamageTarget = null;
+        _activeSkillDamageAmount = 0;
     }
 
     // Resolves Ditto's current target building index even if placed-item list order changed during gameplay.

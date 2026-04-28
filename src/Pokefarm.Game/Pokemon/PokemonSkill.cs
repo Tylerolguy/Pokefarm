@@ -11,5 +11,7 @@ internal enum SkillType
     Harvesting = 5,
     Crafting = 6,
     Cooking = 7,
-    Construction = 8
+    Construction = 8,
+    Cut = 9,
+    RockSmash = 10
 }

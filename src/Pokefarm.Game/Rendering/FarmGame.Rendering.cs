@@ -201,6 +201,11 @@ public sealed partial class FarmGame
             _spriteBatch.Draw(texture, item.Bounds, drawTint);
             DrawPanelBorder(item.Bounds, new Color(40, 28, 20));
 
+            if (item.Definition == ItemCatalog.Pc && !_storyManager.TutorialStarted)
+            {
+                DrawPcTutorialMarker(item);
+            }
+
             if (item.IsConstructionSite)
             {
                 DrawConstructionSiteMarker(item);
@@ -232,6 +237,24 @@ public sealed partial class FarmGame
                 DrawBuildingWorkerIcons(item);
             }
         }
+    }
+
+    private void DrawPcTutorialMarker(PlacedItem pc)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Point textSize = MeasurePixelText("!", UiFontPixelSize, UiFontSpacing);
+        Rectangle panel = new(
+            pc.Bounds.Center.X - (textSize.X / 2) - 6,
+            pc.Bounds.Y - 20,
+            textSize.X + 12,
+            textSize.Y + 8);
+        _spriteBatch.Draw(_pixel, panel, UnclaimedMarkerBackground);
+        DrawPanelBorder(panel, new Color(181, 138, 95));
+        DrawPixelText("!", new Vector2(panel.X + 6, panel.Y + 4), UnclaimedMarkerText);
     }
 
     // Draws construction-site marker text and overlay so unfinished buildings are visually distinct.
@@ -1319,6 +1342,8 @@ public sealed partial class FarmGame
             return;
         }
 
+        DrawActiveSkillIndicator();
+
         if (_activeDungeonRun is not null)
         {
             GeneratedDungeonRoom? activeRoom = GetActiveDungeonRoom();
@@ -1357,13 +1382,37 @@ public sealed partial class FarmGame
             string buildingName = _interactTarget.IsConstructionSite
                 ? $"{_interactTarget.Definition.Name.ToUpperInvariant()} SITE"
                 : _interactTarget.Definition.Name.ToUpperInvariant();
-            DrawPromptPanel($"PRESS E TO USE {buildingName}", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
+            string promptText = IsBuildingDamageSkillSelected()
+                ? $"PRESS E TO DAMAGE {buildingName}"
+                : $"PRESS E TO USE {buildingName}";
+            DrawPromptPanel(promptText, new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
         }
 
         if (!string.IsNullOrEmpty(_interactionMessage))
         {
             DrawPromptPanel(_interactionMessage, new Point(GraphicsDevice.Viewport.Width / 2, 48));
         }
+    }
+
+    // Draws the selected Cut/Rock Smash indicator at the top-right HUD area.
+    private void DrawActiveSkillIndicator()
+    {
+        if (_spriteBatch is null || _pixel is null || !IsBuildingDamageSkillSelected())
+        {
+            return;
+        }
+
+        Viewport viewport = GraphicsDevice.Viewport;
+        Rectangle outer = new(viewport.Width - 62, 14, 48, 48);
+        Rectangle inner = new(outer.X + 4, outer.Y + 4, outer.Width - 8, outer.Height - 8);
+        Color iconColor = _activeDittoSkill == SkillType.RockSmash
+            ? new Color(132, 94, 58)
+            : new Color(74, 166, 88);
+
+        _spriteBatch.Draw(_pixel, outer, new Color(30, 20, 14, 230));
+        DrawPanelBorder(outer, new Color(236, 220, 196));
+        _spriteBatch.Draw(_pixel, inner, iconColor);
+        DrawPixelText(GetActiveSkillLabel().ToUpperInvariant(), new Vector2(outer.X - 8, outer.Bottom + 6), new Color(236, 220, 196));
     }
 
     // Computes and returns active Dungeon Room without mutating persistent game state.

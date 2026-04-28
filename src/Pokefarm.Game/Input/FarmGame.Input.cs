@@ -605,6 +605,14 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (_interactTarget.Definition == ItemCatalog.Pc &&
+            _storyManager.TryBuildPcTutorialScene(out StorySceneDefinition tutorialScene))
+        {
+            _storyManager.MarkTutorialStarted();
+            StartStoryScene(tutorialScene, _interactTarget);
+            return;
+        }
+
         if (_interactTarget.Definition == ItemCatalog.Chest && !_interactTarget.IsConstructionSite)
         {
             OpenChestStorage(_interactTarget);
@@ -612,6 +620,66 @@ public sealed partial class FarmGame
         }
 
         OpenBuildingTalk(_interactTarget);
+    }
+
+    // Attempts to use Ditto's selected Cut/Rock Smash skill on a facing building.
+    private void TryUseActiveSkillOnBuilding()
+    {
+        if (_interactTarget is null)
+        {
+            return;
+        }
+
+        if (!CanAddInventoryItem(_interactTarget.Definition))
+        {
+            // TO DO REMOVE: For now, block skill building destruction when inventory cannot hold the dropped building item.
+            _interactionMessage = "INVENTORY FULL";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        if (_activeSkillDamageTarget is null || _activeSkillDamageTarget != _interactTarget)
+        {
+            _activeSkillDamageTarget = _interactTarget;
+            _activeSkillDamageAmount = 0;
+        }
+
+        _activeSkillDamageAmount += 1;
+        _activeSkillDamageLastWorldTimeSeconds = _elapsedWorldTimeSeconds;
+
+        if (_activeSkillDamageAmount >= SkillBuildingHealth)
+        {
+            DestroyBuildingWithActiveSkill(_interactTarget);
+            return;
+        }
+
+        _interactionMessage = $"{GetActiveSkillLabel().ToUpperInvariant()} {_activeSkillDamageAmount}/{SkillBuildingHealth}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Removes a building from the world and transfers it into inventory as a skill-destruction reward.
+    private void DestroyBuildingWithActiveSkill(PlacedItem targetBuilding)
+    {
+        int buildingIndex = _placedItems.FindIndex(item => item == targetBuilding);
+        if (buildingIndex < 0)
+        {
+            _activeSkillDamageTarget = null;
+            _activeSkillDamageAmount = 0;
+            return;
+        }
+
+        PlacedItem building = _placedItems[buildingIndex];
+        if (!AddInventoryItem(building.Definition, 1))
+        {
+            return;
+        }
+
+        _placedItems.RemoveAt(buildingIndex);
+        _activeSkillDamageTarget = null;
+        _activeSkillDamageAmount = 0;
+        _interactTarget = null;
+        _interactionMessage = $"{building.Definition.Name.ToUpperInvariant()} DESTROYED";
+        _interactionMessageTimer = InteractionMessageDuration;
     }
 
     // Attempts to talk With Pokemon and reports success so callers can handle failure without exceptions.
@@ -870,6 +938,21 @@ public sealed partial class FarmGame
         _talkExitTimer = 0f;
         SetActiveTalkIcon("Ditto");
         _inputMode = InputMode.Talking;
+    }
+
+    private void StartStoryScene(StorySceneDefinition scene, PlacedItem sourceBuilding)
+    {
+        ResetAssignmentFailureDialogueState();
+        FaceConversationTarget(new Vector2(sourceBuilding.Bounds.Center.X, sourceBuilding.Bounds.Center.Y));
+        _talkState.BeginBuildingTalk(
+            sourceBuilding,
+            scene.OpeningText,
+            scene.Options,
+            scene.SpeakerName);
+        _talkExitTimer = 0f;
+        SetActiveTalkIcon(scene.SpeakerName);
+        _inputMode = InputMode.Talking;
+        _activeStorySceneId = scene.Id;
     }
 
     // Searches current state to locate nearby Pokemon Target Index.
@@ -1134,6 +1217,21 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.StoryTutorialChooseA)
+        {
+            _talkState.SetText("GREAT");
+            _talkState.SetOptions([new PokemonDialogueOption("BYE", PokemonDialogueAction.Exit)]);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.StoryTutorialChooseB)
+        {
+            bool spawned = TrySpawnStoryPokemonNearActiveBuilding("Rotom");
+            _talkState.SetText(spawned ? "I AM HERE NOW" : "NO VALID SPOT");
+            _talkState.SetOptions([new PokemonDialogueOption("BYE", PokemonDialogueAction.Exit)]);
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.DequeueWorkbenchItem)
         {
             DequeueActiveWorkbenchItem();
@@ -1172,6 +1270,8 @@ public sealed partial class FarmGame
                 ExitTalkMode();
             }
 
+            _activeStorySceneId = null;
+
             return;
         }
 
@@ -1186,6 +1286,35 @@ public sealed partial class FarmGame
         }
 
         ExitTalkMode();
+        _activeStorySceneId = null;
+    }
+
+    private bool TrySpawnStoryPokemonNearActiveBuilding(string pokemonName)
+    {
+        if (_talkState.ActiveBuilding is null)
+        {
+            return false;
+        }
+
+        if (_spawnedDittos.Any(pokemon => string.Equals(pokemon.Name, pokemonName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (!TryFindNearbyOpenPokemonSpawnPosition(_talkState.ActiveBuilding.Bounds, out Vector2 spawnPosition))
+        {
+            return false;
+        }
+
+        SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(pokemonName);
+        _spawnedDittos.Add(new SpawnedPokemon(
+            _nextPokemonId++,
+            spawnDefinition.Name,
+            spawnPosition,
+            Direction.Down,
+            GetRandomMoveDelaySeconds(),
+            spawnDefinition.SkillLevels));
+        return true;
     }
 
     // Enters talk Exit Countdown flow and initializes transient interaction state.
@@ -1207,6 +1336,7 @@ public sealed partial class FarmGame
         _dittoWorkDialogueDotTimer = 0f;
         _dittoWorkDialogueDotCount = 0;
         _talkState.Reset();
+        _activeStorySceneId = null;
         ResetAssignmentFailureDialogueState();
     }
 
