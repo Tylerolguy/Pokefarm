@@ -21,6 +21,13 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         Resource,
         Workbench
     }
+    private enum BootFlowState
+    {
+        TitleScreen,
+        ProfileSelect,
+        ProfileCreate,
+        Playing
+    }
 
     private const int InventoryColumns = 4;
     private const int InventoryRows = 2;
@@ -82,6 +89,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     [
         RecipeCatalog.NoBerryPlant,
         RecipeCatalog.WorkBench,
+        RecipeCatalog.Chest,
         RecipeCatalog.Bed,
         RecipeCatalog.OranBerryPlant
     ];
@@ -143,6 +151,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private GeneratedDungeon? _activeDungeonRun;
     private int _activeDungeonRoomIndex = -1;
     private int _activeDungeonPortalIndex = -1;
+    private int _activeChestIndex = -1;
+    private bool _isChestSelectionOnChest = true;
+    private int _selectedChestStorageIndex;
+    private int _selectedChestInventoryIndex;
     private double _elapsedWorldTimeSeconds;
     private float _interactionMessageTimer;
     private float _dialogueTransition;
@@ -160,6 +172,11 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _dittoWorkDialogueDotCount;
     private int _nextPokemonId = 1;
     private int _nextConstructionSiteId = 1;
+    private BootFlowState _bootFlowState = BootFlowState.TitleScreen;
+    private readonly List<string> _availableProfiles = [];
+    private int _selectedProfileIndex;
+    private string _newProfileNameBuffer = string.Empty;
+    private string? _activeProfileName;
     private static readonly Dictionary<char, string[]> PixelFont = new()
     {
         ['A'] = ["01110","10001","10001","11111","10001","10001","10001"],
@@ -210,22 +227,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
         _graphics.PreferredBackBufferWidth = 1280;
         _graphics.PreferredBackBufferHeight = 720;
-
-        Point pcSize = ItemCatalog.Pc.Size;
-        Rectangle pcBounds = new(
-            (_worldBounds.Width - pcSize.X) / 2,
-            (_worldBounds.Height - pcSize.Y) / 2,
-            pcSize.X,
-            pcSize.Y);
-        _placedItems.Add(new PlacedItem(pcBounds, ItemCatalog.Pc, 0d));
-
-        Point portalSize = ItemCatalog.DungeonPortal.Size;
-        Rectangle portalBounds = new(
-            Math.Clamp(pcBounds.Right + 48, BorderThickness, _worldBounds.Width - BorderThickness - portalSize.X),
-            Math.Clamp(pcBounds.Y, BorderThickness, _worldBounds.Height - BorderThickness - portalSize.Y),
-            portalSize.X,
-            portalSize.Y);
-        _placedItems.Add(new PlacedItem(portalBounds, ItemCatalog.DungeonPortal, 0d));
+        RefreshProfileList();
     }
 
     // Loads content assets/data and primes runtime state before use.
@@ -354,6 +356,22 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         bool moveUpPressed = keyboard.IsKeyDown(Keys.W) && !_previousKeyboard.IsKeyDown(Keys.W);
         bool moveDownPressed = keyboard.IsKeyDown(Keys.S) && !_previousKeyboard.IsKeyDown(Keys.S);
 
+        if (_bootFlowState != BootFlowState.Playing)
+        {
+            UpdateBootFlow(keyboard, confirmPressed, interactPressed, moveUpPressed, moveDownPressed);
+            if (_interactionMessageTimer > 0f)
+            {
+                _interactionMessageTimer = Math.Max(0f, _interactionMessageTimer - deltaTime);
+                if (_interactionMessageTimer <= 0f)
+                {
+                    _interactionMessage = null;
+                }
+            }
+            _previousKeyboard = keyboard;
+            base.Update(gameTime);
+            return;
+        }
+
         if (hitboxModePressed)
         {
             _isHitboxDisplayMode = !_isHitboxDisplayMode;
@@ -376,6 +394,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             else if (_inputMode == InputMode.Crafting)
             {
                 _inputMode = InputMode.Gameplay;
+            }
+            else if (_inputMode == InputMode.ChestStorage)
+            {
+                CloseChestStorage();
             }
             else if (_inputMode == InputMode.PcMenu)
             {
@@ -467,6 +489,20 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             if (confirmPressed)
             {
                 CraftSelectedRecipe();
+            }
+        }
+        else if (_inputMode == InputMode.ChestStorage)
+        {
+            UpdateChestStorageNavigation(moveUpPressed, moveDownPressed, moveLeftPressed, moveRightPressed);
+
+            if (interactPressed)
+            {
+                CloseChestStorage();
+            }
+
+            if (confirmPressed)
+            {
+                TransferSelectedChestItem();
             }
         }
         else if (_inputMode == InputMode.PcMenu)
@@ -599,6 +635,16 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             return;
         }
 
+        if (_bootFlowState != BootFlowState.Playing)
+        {
+            _spriteBatch.Begin();
+            DrawBootFlowScreen();
+            DrawInteractionOverlay();
+            _spriteBatch.End();
+            base.Draw(gameTime);
+            return;
+        }
+
         _spriteBatch.Begin(transformMatrix: _cameraMatrix);
         if (_activeDungeonRun is not null)
         {
@@ -624,6 +670,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         else if (_inputMode == InputMode.Crafting)
         {
             DrawCraftingScreen();
+        }
+        else if (_inputMode == InputMode.ChestStorage)
+        {
+            DrawChestStorageScreen();
         }
         else if (_inputMode == InputMode.PcMenu)
         {
@@ -2985,6 +3035,52 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
         _inventoryItems[existingIndex] = entry with { Quantity = remaining };
         EnsureInventorySelectionVisible();
+    }
+
+    // Computes and returns a sanitized copy of an item's internal storage entries.
+    private static List<InventoryEntry> GetStoredItems(PlacedItem item)
+    {
+        if (item.StoredItems is null)
+        {
+            return [];
+        }
+
+        return item.StoredItems
+            .Where(entry => entry.Quantity > 0)
+            .Select(entry => new InventoryEntry(entry.Definition, entry.Quantity))
+            .ToList();
+    }
+
+    // Checks whether an item can be added to a building storage container based on its capacity rules.
+    private static bool CanAddStoredItem(PlacedItem item, ItemDefinition definition)
+    {
+        int capacity = item.Definition.StorageCapacity;
+        if (capacity <= 0)
+        {
+            return false;
+        }
+
+        List<InventoryEntry> storedItems = GetStoredItems(item);
+        return storedItems.Any(entry => entry.Definition == definition) || storedItems.Count < capacity;
+    }
+
+    // Removes one unit of the selected item from an item's storage list.
+    private static List<InventoryEntry> RemoveStoredItemUnit(List<InventoryEntry> storedItems, int index)
+    {
+        if (index < 0 || index >= storedItems.Count)
+        {
+            return storedItems;
+        }
+
+        InventoryEntry selectedEntry = storedItems[index];
+        if (selectedEntry.Quantity > 1)
+        {
+            storedItems[index] = selectedEntry with { Quantity = selectedEntry.Quantity - 1 };
+            return storedItems;
+        }
+
+        storedItems.RemoveAt(index);
+        return storedItems;
     }
 
     // Builds circle Texture from current inputs for downstream gameplay logic.

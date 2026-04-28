@@ -504,6 +504,26 @@ public sealed partial class FarmGame
             return;
         }
 
+        List<InventoryEntry> storedItems = GetStoredItems(_removeTarget);
+        if (storedItems.Count > 0)
+        {
+            List<ItemDefinition> projectedDefinitions = storedItems.Select(entry => entry.Definition).ToList();
+            projectedDefinitions.Add(_removeTarget.Definition);
+            if (_removeTarget.Definition.IsResourceProduction &&
+                producedMaterial is not null &&
+                _removeTarget.StoredProducedUnits > 0)
+            {
+                projectedDefinitions.Add(producedMaterial);
+            }
+
+            if (!CanAddInventoryItems(projectedDefinitions))
+            {
+                _interactionMessage = "INVENTORY FULL";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return;
+            }
+        }
+
         if (_removeTarget.Definition == ItemCatalog.Bed)
         {
             foreach (int residentPokemonId in GetBedResidentPokemonIds(_removeTarget))
@@ -565,6 +585,11 @@ public sealed partial class FarmGame
             AddInventoryItem(producedMaterial, _removeTarget.StoredProducedUnits);
         }
 
+        foreach (InventoryEntry storedEntry in storedItems)
+        {
+            AddInventoryItem(storedEntry.Definition, storedEntry.Quantity);
+        }
+
         _placedItems.Remove(_removeTarget);
         AddInventoryItem(_removeTarget.Definition, 1);
         _removeTarget = null;
@@ -577,6 +602,12 @@ public sealed partial class FarmGame
         if (_interactTarget is null)
         {
             OpenCrafting(CraftingSource.HandheldCrafting);
+            return;
+        }
+
+        if (_interactTarget.Definition == ItemCatalog.Chest && !_interactTarget.IsConstructionSite)
+        {
+            OpenChestStorage(_interactTarget);
             return;
         }
 
@@ -626,6 +657,183 @@ public sealed partial class FarmGame
         _inputMode = InputMode.Crafting;
         List<RecipeDefinition> activeRecipes = GetActiveRecipes();
         _selectedCraftingIndex = Math.Clamp(_selectedCraftingIndex, 0, Math.Max(0, activeRecipes.Count - 1));
+    }
+
+    // Enters chest storage flow and initializes transient interaction state.
+    private void OpenChestStorage(PlacedItem chest)
+    {
+        if (chest.Definition != ItemCatalog.Chest || chest.IsConstructionSite)
+        {
+            return;
+        }
+
+        int chestIndex = _placedItems.FindIndex(item => item == chest);
+        if (chestIndex < 0)
+        {
+            return;
+        }
+
+        _activeChestIndex = chestIndex;
+        _isChestSelectionOnChest = true;
+        _selectedChestStorageIndex = 0;
+        _selectedChestInventoryIndex = Math.Clamp(_selectedChestInventoryIndex, 0, Math.Max(0, _inventoryItems.Count - 1));
+        _inputMode = InputMode.ChestStorage;
+    }
+
+    // Leaves chest storage flow and restores default interaction state.
+    private void CloseChestStorage()
+    {
+        _inputMode = InputMode.Gameplay;
+        _activeChestIndex = -1;
+        _isChestSelectionOnChest = true;
+        _selectedChestStorageIndex = 0;
+        _selectedChestInventoryIndex = 0;
+    }
+
+    // Ticks chest storage navigation each frame and keeps related timers and state synchronized.
+    private void UpdateChestStorageNavigation(bool moveUp, bool moveDown, bool moveLeft, bool moveRight)
+    {
+        if (moveLeft)
+        {
+            _isChestSelectionOnChest = true;
+        }
+        else if (moveRight)
+        {
+            _isChestSelectionOnChest = false;
+        }
+
+        if (_isChestSelectionOnChest)
+        {
+            List<InventoryEntry> storedItems = GetActiveChestStoredItems();
+            if (storedItems.Count <= 0)
+            {
+                _selectedChestStorageIndex = 0;
+                return;
+            }
+
+            if (moveUp)
+            {
+                _selectedChestStorageIndex = Math.Max(0, _selectedChestStorageIndex - 1);
+            }
+
+            if (moveDown)
+            {
+                _selectedChestStorageIndex = Math.Min(storedItems.Count - 1, _selectedChestStorageIndex + 1);
+            }
+
+            return;
+        }
+
+        if (_inventoryItems.Count <= 0)
+        {
+            _selectedChestInventoryIndex = 0;
+            return;
+        }
+
+        if (moveUp)
+        {
+            _selectedChestInventoryIndex = Math.Max(0, _selectedChestInventoryIndex - 1);
+        }
+
+        if (moveDown)
+        {
+            _selectedChestInventoryIndex = Math.Min(_inventoryItems.Count - 1, _selectedChestInventoryIndex + 1);
+        }
+    }
+
+    // Transfers one unit between player inventory and active chest based on current pane selection.
+    private void TransferSelectedChestItem()
+    {
+        if (_activeChestIndex < 0 ||
+            _activeChestIndex >= _placedItems.Count ||
+            _placedItems[_activeChestIndex].Definition != ItemCatalog.Chest ||
+            _placedItems[_activeChestIndex].IsConstructionSite)
+        {
+            _interactionMessage = "CHEST NOT AVAILABLE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            CloseChestStorage();
+            return;
+        }
+
+        PlacedItem chest = _placedItems[_activeChestIndex];
+        List<InventoryEntry> storedItems = GetStoredItems(chest);
+
+        if (_isChestSelectionOnChest)
+        {
+            if (storedItems.Count <= 0)
+            {
+                return;
+            }
+
+            _selectedChestStorageIndex = Math.Clamp(_selectedChestStorageIndex, 0, storedItems.Count - 1);
+            InventoryEntry selectedChestEntry = storedItems[_selectedChestStorageIndex];
+            if (!CanAddInventoryItem(selectedChestEntry.Definition))
+            {
+                _interactionMessage = "INVENTORY FULL";
+                _interactionMessageTimer = InteractionMessageDuration;
+                return;
+            }
+
+            if (!AddInventoryItem(selectedChestEntry.Definition, 1))
+            {
+                return;
+            }
+
+            storedItems = RemoveStoredItemUnit(storedItems, _selectedChestStorageIndex);
+            _placedItems[_activeChestIndex] = chest with { StoredItems = storedItems };
+            _selectedChestStorageIndex = Math.Clamp(_selectedChestStorageIndex, 0, Math.Max(0, storedItems.Count - 1));
+            _interactionMessage = $"TOOK {selectedChestEntry.Definition.Name.ToUpperInvariant()}";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        if (_inventoryItems.Count <= 0)
+        {
+            return;
+        }
+
+        _selectedChestInventoryIndex = Math.Clamp(_selectedChestInventoryIndex, 0, _inventoryItems.Count - 1);
+        InventoryEntry selectedInventoryEntry = _inventoryItems[_selectedChestInventoryIndex];
+        if (!CanAddStoredItem(chest, selectedInventoryEntry.Definition))
+        {
+            _interactionMessage = "CHEST FULL";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        int existingIndex = storedItems.FindIndex(entry => entry.Definition == selectedInventoryEntry.Definition);
+        if (existingIndex >= 0)
+        {
+            InventoryEntry existing = storedItems[existingIndex];
+            storedItems[existingIndex] = existing with { Quantity = existing.Quantity + 1 };
+        }
+        else
+        {
+            storedItems.Add(new InventoryEntry(selectedInventoryEntry.Definition, 1));
+        }
+
+        RemoveInventoryItem(selectedInventoryEntry.Definition, 1);
+        _placedItems[_activeChestIndex] = chest with { StoredItems = storedItems };
+        _selectedChestInventoryIndex = Math.Clamp(_selectedChestInventoryIndex, 0, Math.Max(0, _inventoryItems.Count - 1));
+        _interactionMessage = $"STORED {selectedInventoryEntry.Definition.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Computes and returns active chest storage entries without mutating persistent game state.
+    private List<InventoryEntry> GetActiveChestStoredItems()
+    {
+        if (_activeChestIndex < 0 || _activeChestIndex >= _placedItems.Count)
+        {
+            return [];
+        }
+
+        PlacedItem chest = _placedItems[_activeChestIndex];
+        if (chest.Definition != ItemCatalog.Chest || chest.IsConstructionSite)
+        {
+            return [];
+        }
+
+        return GetStoredItems(chest);
     }
 
     // Searches current state to locate interactable Target.
@@ -905,6 +1113,12 @@ public sealed partial class FarmGame
         if (selectedOption.Action == PokemonDialogueAction.OpenPcLevel)
         {
             OpenPcMenu(PcMenuScreen.Level);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.SaveGame)
+        {
+            SaveActiveProfile();
             return;
         }
 

@@ -1,4 +1,5 @@
 using Microsoft.Xna.Framework;
+using System.Collections.Generic;
 
 namespace Pokefarm.Game;
 
@@ -33,6 +34,7 @@ internal sealed record PlacedItem(
     float WorkbenchCraftEffortRequired = 0f,
     ItemDefinition? WorkbenchStoredItem = null,
     int WorkbenchStoredQuantity = 0,
+    List<InventoryEntry>? StoredItems = null,
     bool IsConstructionSite = false,
     int? ConstructionSiteId = null,
     float ConstructionEffort = 0f)

@@ -28,7 +28,8 @@ internal sealed record ItemDefinition(
     SkillType ConstructionRequiredSkill2 = SkillType.None,
     int ConstructionRequiredSkillLevel2 = 0,
     SkillType ConstructionRequiredSkill3 = SkillType.None,
-    int ConstructionRequiredSkillLevel3 = 0)
+    int ConstructionRequiredSkillLevel3 = 0,
+    int StorageCapacity = 0)
 {
     public bool IsBuildingLike => Kind == ItemKind.Building || Kind == ItemKind.ResourceProductionBuilding;
 

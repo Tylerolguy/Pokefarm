@@ -10,5 +10,6 @@ internal enum InputMode
     Crafting,
     Talking,
     PcMenu,
-    DungeonMenu
+    DungeonMenu,
+    ChestStorage
 }

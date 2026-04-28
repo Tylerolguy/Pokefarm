@@ -20,6 +20,14 @@ internal static class RecipeCatalog
         CraftingSource.BasicWorkBenchCrafting,
         5f);
 
+    public static readonly RecipeDefinition Chest = new(
+        "Chest",
+        ItemCatalog.Chest,
+        [
+            new RecipeCost(ItemCatalog.Wood, 10)
+        ],
+        CraftingSource.HandheldCrafting);
+
     public static readonly RecipeDefinition OranBerryPlant = new(
         "Oran Berry",
         ItemCatalog.OranBerry,

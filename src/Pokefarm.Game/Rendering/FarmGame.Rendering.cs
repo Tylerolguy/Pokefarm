@@ -748,6 +748,96 @@ public sealed partial class FarmGame
         }
     }
 
+    // Draws chest storage screen with chest and inventory panes so items can be transferred between them.
+    private void DrawChestStorageScreen()
+    {
+        if (_spriteBatch is null || _pixel is null || _circleTexture is null)
+        {
+            return;
+        }
+
+        List<InventoryEntry> chestEntries = GetActiveChestStoredItems();
+        int chestCapacity = 0;
+        if (_activeChestIndex >= 0 &&
+            _activeChestIndex < _placedItems.Count &&
+            _placedItems[_activeChestIndex].Definition == ItemCatalog.Chest)
+        {
+            chestCapacity = _placedItems[_activeChestIndex].Definition.StorageCapacity;
+        }
+
+        Viewport viewport = GraphicsDevice.Viewport;
+        Rectangle overlay = new(0, 0, viewport.Width, viewport.Height);
+        Rectangle panel = new(viewport.Width / 2 - 420, viewport.Height / 2 - 260, 840, 520);
+        Rectangle chestPanel = new(panel.X + 24, panel.Y + 74, (panel.Width / 2) - 36, panel.Height - 118);
+        Rectangle inventoryPanel = new(chestPanel.Right + 24, panel.Y + 74, (panel.Width / 2) - 36, panel.Height - 118);
+
+        _spriteBatch.Draw(_pixel, overlay, new Color(14, 18, 22, 215));
+        _spriteBatch.Draw(_pixel, panel, new Color(32, 40, 48, 245));
+        DrawPanelBorder(panel, new Color(132, 164, 184));
+        DrawPixelText("CHEST STORAGE", new Vector2(panel.X + 24, panel.Y + 18), new Color(226, 234, 240));
+        DrawPixelText("A/D SWITCH  W/S SELECT  SPACE TRANSFER  E CLOSE", new Vector2(panel.X + 24, panel.Y + 42), new Color(196, 210, 220));
+
+        _spriteBatch.Draw(_pixel, chestPanel, new Color(44, 62, 76));
+        DrawPanelBorder(chestPanel, _isChestSelectionOnChest ? Color.Gold : new Color(120, 150, 170));
+        _spriteBatch.Draw(_pixel, inventoryPanel, new Color(52, 48, 44));
+        DrawPanelBorder(inventoryPanel, !_isChestSelectionOnChest ? Color.Gold : new Color(132, 116, 98));
+
+        DrawPixelText("CHEST", new Vector2(chestPanel.X + 12, chestPanel.Y + 10), new Color(224, 232, 236));
+        DrawPixelText($"{chestEntries.Count}/{Math.Max(0, chestCapacity)} STACKS", new Vector2(chestPanel.X + 12, chestPanel.Y + 30), new Color(196, 210, 220));
+        DrawPixelText("INVENTORY", new Vector2(inventoryPanel.X + 12, inventoryPanel.Y + 10), new Color(236, 220, 196));
+        DrawPixelText($"{_inventoryItems.Count}/{_inventoryCapacity} STACKS", new Vector2(inventoryPanel.X + 12, inventoryPanel.Y + 30), new Color(210, 190, 164));
+
+        DrawStorageEntryList(chestPanel, chestEntries, _selectedChestStorageIndex, _isChestSelectionOnChest, new Color(74, 108, 132), new Color(58, 84, 102));
+        DrawStorageEntryList(inventoryPanel, _inventoryItems, _selectedChestInventoryIndex, !_isChestSelectionOnChest, new Color(116, 90, 60), new Color(90, 70, 48));
+    }
+
+    // Draws one pane's storage entries and highlights the selected row.
+    private void DrawStorageEntryList(
+        Rectangle panel,
+        List<InventoryEntry> entries,
+        int selectedIndex,
+        bool paneSelected,
+        Color selectedFill,
+        Color unselectedFill)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        int rowHeight = 32;
+        int listTop = panel.Y + 56;
+        int maxRows = Math.Max(1, (panel.Height - 68) / rowHeight);
+        int clampedSelection = entries.Count <= 0 ? 0 : Math.Clamp(selectedIndex, 0, entries.Count - 1);
+        int scrollOffset = Math.Clamp(clampedSelection - maxRows + 1, 0, Math.Max(0, entries.Count - maxRows));
+
+        if (entries.Count <= 0)
+        {
+            DrawPixelText("EMPTY", new Vector2(panel.X + 14, panel.Y + 64), new Color(196, 202, 208));
+            return;
+        }
+
+        for (int visibleIndex = 0; visibleIndex < maxRows; visibleIndex++)
+        {
+            int entryIndex = scrollOffset + visibleIndex;
+            if (entryIndex >= entries.Count)
+            {
+                break;
+            }
+
+            InventoryEntry entry = entries[entryIndex];
+            Rectangle row = new(panel.X + 10, listTop + (visibleIndex * rowHeight), panel.Width - 20, rowHeight - 4);
+            bool selected = entryIndex == clampedSelection;
+            _spriteBatch.Draw(_pixel, row, selected ? selectedFill : unselectedFill);
+            DrawPanelBorder(row, selected && paneSelected ? Color.Gold : new Color(148, 136, 120));
+
+            DrawPixelText(entry.Definition.Name.ToUpperInvariant(), new Vector2(row.X + 10, row.Y + 8), new Color(236, 220, 196));
+            string quantityText = $"X{entry.Quantity}";
+            Point quantitySize = MeasurePixelText(quantityText);
+            DrawPixelText(quantityText, new Vector2(row.Right - quantitySize.X - 10, row.Y + 8), new Color(236, 220, 196));
+        }
+    }
+
     // Builds a compact queue summary that shows each visible slot and quantity on the active workbench.
     private static string GetWorkbenchQueueStatusText(PlacedItem workbench)
     {
