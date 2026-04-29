@@ -78,6 +78,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private readonly GraphicsDeviceManager _graphics;
     private readonly Rectangle _worldBounds = new(0, 0, WorldWidth, WorldHeight);
     private readonly List<PlacedItem> _placedItems = [];
+    private readonly List<DroppedWorldItem> _droppedWorldItems = [];
     private readonly List<SpawnedPokemon> _spawnedDittos = [];
     private readonly List<InventoryEntry> _inventoryItems =
     [
@@ -128,9 +129,12 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _selectedInventoryIndex;
     private int _inventoryVisibleStartIndex;
     private int _inventoryCapacity = InventoryColumns * InventoryRows;
+    private bool _isInventoryActionMenuOpen;
+    private int _selectedInventoryActionIndex;
     private Vector2 _previewOffset = new(PlayerSize + 24f, 0f);
     private PlacedItem? _previewItem;
     private PlacedItem? _interactTarget;
+    private int _nearbyDroppedItemIndex = -1;
     private int _talkTargetIndex = -1;
     private InputMode _inputMode;
     private Direction _playerDirection = Direction.Down;
@@ -416,7 +420,15 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
             else if (_inputMode == InputMode.Inventory)
             {
-                _inputMode = InputMode.Gameplay;
+                if (_isInventoryActionMenuOpen)
+                {
+                    _isInventoryActionMenuOpen = false;
+                    _selectedInventoryActionIndex = 0;
+                }
+                else
+                {
+                    _inputMode = InputMode.Gameplay;
+                }
             }
             else if (_inputMode == InputMode.Crafting)
             {
@@ -454,6 +466,11 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             {
                 ExitPlacementMode(InputMode.Inventory);
             }
+            else if (_inputMode == InputMode.Inventory && _isInventoryActionMenuOpen)
+            {
+                _isInventoryActionMenuOpen = false;
+                _selectedInventoryActionIndex = 0;
+            }
             else
             {
                 ToggleInventoryMode();
@@ -466,7 +483,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             if (confirmPressed)
             {
-                BeginPlacementFromInventory();
+                ConfirmInventoryAction();
             }
         }
         else if (_inputMode == InputMode.Placement)
@@ -576,6 +593,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 {
                     AdvanceDungeonRoomOrExit();
                 }
+                else if (TryPickUpNearbyDroppedWorldItem())
+                {
+                }
                 else if (IsBuildingDamageSkillSelected())
                 {
                     TryUseActiveSkillOnBuilding();
@@ -610,6 +630,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         UpdateSpawnedPokemon(deltaTime);
         UpdateActiveSkillBuildingDamageState();
         _interactTarget = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindInteractableTarget() : null;
+        _nearbyDroppedItemIndex = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindNearbyDroppedWorldItemIndex() : -1;
         _talkTargetIndex = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindNearbyPokemonTargetIndex() : -1;
         if (_interactionMessageTimer > 0f)
         {
@@ -660,6 +681,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         {
             DrawFarm();
             DrawPlacedItems();
+            DrawDroppedWorldItems();
             DrawSpawnedDittos();
             DrawPlacementPreview();
         }

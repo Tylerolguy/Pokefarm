@@ -256,6 +256,24 @@ public sealed partial class FarmGame
         }
     }
 
+    // Draws dropped world items as smaller ground pickups.
+    private void DrawDroppedWorldItems()
+    {
+        if (_spriteBatch is null || _pixel is null || _circleTexture is null)
+        {
+            return;
+        }
+
+        foreach (DroppedWorldItem dropped in _droppedWorldItems)
+        {
+            Texture2D texture = (dropped.Definition.IsBuildingLike || dropped.Definition.Kind == ItemKind.Snack) && dropped.Definition.HasCollision
+                ? _pixel
+                : _circleTexture;
+            _spriteBatch.Draw(texture, dropped.Bounds, dropped.Definition.Tint);
+            DrawPanelBorder(dropped.Bounds, new Color(220, 206, 168, 220));
+        }
+    }
+
     private void DrawPcTutorialMarker(PlacedItem pc)
     {
         if (_spriteBatch is null || _pixel is null)
@@ -701,6 +719,48 @@ public sealed partial class FarmGame
         if (scrollOffset + visibleSlots < _inventoryItems.Count)
         {
             DrawTriangleIndicator(new Point(panel.Right - 32, panel.Bottom - 28), false, new Color(236, 220, 196));
+        }
+
+        DrawPixelText(
+            _isInventoryActionMenuOpen ? "SPACE CONFIRM  I/ESC BACK" : "SPACE ACTIONS  I/ESC CLOSE",
+            new Vector2(panel.X + 24, panel.Bottom - 32),
+            new Color(210, 190, 164));
+
+        if (_isInventoryActionMenuOpen &&
+            _selectedInventoryIndex >= 0 &&
+            _selectedInventoryIndex < _inventoryItems.Count)
+        {
+            DrawInventoryActionMenu(panel, _inventoryItems[_selectedInventoryIndex]);
+        }
+    }
+
+    // Draws action options for the selected inventory stack.
+    private void DrawInventoryActionMenu(Rectangle panel, InventoryEntry selectedEntry)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        List<string> actions = [];
+        if (selectedEntry.Definition.IsPlaceable)
+        {
+            actions.Add("BUILD");
+        }
+        actions.Add("DROP");
+
+        Rectangle menuBounds = new(panel.Right - 190, panel.Y + 24, 160, 34 + (actions.Count * 26));
+        _spriteBatch.Draw(_pixel, menuBounds, new Color(30, 20, 14, 232));
+        DrawPanelBorder(menuBounds, new Color(181, 138, 95));
+        DrawPixelText("ACTION", new Vector2(menuBounds.X + 10, menuBounds.Y + 8), new Color(236, 220, 196));
+
+        for (int index = 0; index < actions.Count; index++)
+        {
+            Rectangle row = new(menuBounds.X + 8, menuBounds.Y + 28 + (index * 24), menuBounds.Width - 16, 20);
+            bool selected = index == _selectedInventoryActionIndex;
+            _spriteBatch.Draw(_pixel, row, selected ? new Color(88, 66, 49) : new Color(58, 43, 33));
+            DrawPanelBorder(row, selected ? Color.Gold : new Color(120, 90, 65));
+            DrawPixelText(actions[index], new Vector2(row.X + 8, row.Y + 5), new Color(236, 220, 196));
         }
     }
 
@@ -1478,6 +1538,12 @@ public sealed partial class FarmGame
                 ? $"PRESS E TO DAMAGE {buildingName}"
                 : $"PRESS E TO USE {buildingName}";
             DrawPromptPanel(promptText, new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
+        }
+
+        if (_nearbyDroppedItemIndex >= 0 && _nearbyDroppedItemIndex < _droppedWorldItems.Count)
+        {
+            string droppedName = _droppedWorldItems[_nearbyDroppedItemIndex].Definition.Name.ToUpperInvariant();
+            DrawPromptPanel($"PRESS E TO PICK UP {droppedName}", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 24));
         }
 
         if (!string.IsNullOrEmpty(_interactionMessage))

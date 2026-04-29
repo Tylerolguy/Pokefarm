@@ -83,12 +83,16 @@ public sealed partial class FarmGame
     {
         if (_inputMode == InputMode.Inventory)
         {
+            _isInventoryActionMenuOpen = false;
+            _selectedInventoryActionIndex = 0;
             _inputMode = InputMode.Gameplay;
             return;
         }
 
         ExitPlacementMode(InputMode.Gameplay);
         _inputMode = InputMode.Inventory;
+        _isInventoryActionMenuOpen = false;
+        _selectedInventoryActionIndex = 0;
         EnsureInventorySelectionVisible();
     }
 
@@ -184,6 +188,83 @@ public sealed partial class FarmGame
         _previewPlacementValid = CanPlaceItem(previewItem);
     }
 
+    // Handles inventory action confirmation flow (Build/Drop) for the selected inventory stack.
+    private void ConfirmInventoryAction()
+    {
+        if (_selectedInventoryIndex < 0 || _selectedInventoryIndex >= _inventoryItems.Count)
+        {
+            _isInventoryActionMenuOpen = false;
+            _selectedInventoryActionIndex = 0;
+            return;
+        }
+
+        if (!_isInventoryActionMenuOpen)
+        {
+            _isInventoryActionMenuOpen = true;
+            _selectedInventoryActionIndex = 0;
+            return;
+        }
+
+        InventoryEntry selectedEntry = _inventoryItems[_selectedInventoryIndex];
+        List<string> actions = GetInventoryActions(selectedEntry.Definition);
+        if (_selectedInventoryActionIndex < 0 || _selectedInventoryActionIndex >= actions.Count)
+        {
+            _selectedInventoryActionIndex = 0;
+            return;
+        }
+
+        string action = actions[_selectedInventoryActionIndex];
+        if (action == "BUILD")
+        {
+            BeginPlacementFromInventory();
+            _isInventoryActionMenuOpen = false;
+            _selectedInventoryActionIndex = 0;
+            return;
+        }
+
+        if (action == "DROP")
+        {
+            TryDropSelectedInventoryItem();
+            _isInventoryActionMenuOpen = false;
+            _selectedInventoryActionIndex = 0;
+        }
+    }
+
+    // Computes and returns available inventory actions for a specific item definition.
+    private static List<string> GetInventoryActions(ItemDefinition definition)
+    {
+        List<string> actions = [];
+        if (definition.IsPlaceable)
+        {
+            actions.Add("BUILD");
+        }
+
+        actions.Add("DROP");
+        return actions;
+    }
+
+    // Attempts to drop one unit from selected inventory stack onto the ground.
+    private void TryDropSelectedInventoryItem()
+    {
+        if (_selectedInventoryIndex < 0 || _selectedInventoryIndex >= _inventoryItems.Count)
+        {
+            return;
+        }
+
+        InventoryEntry entry = _inventoryItems[_selectedInventoryIndex];
+        if (!TryFindDroppedItemSpawnBounds(_playerPosition, entry.Definition, out Rectangle dropBounds))
+        {
+            _interactionMessage = "NO ROOM TO DROP";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        _droppedWorldItems.Add(new DroppedWorldItem(dropBounds, entry.Definition, _elapsedWorldTimeSeconds));
+        RemoveInventoryItem(entry.Definition, 1);
+        _interactionMessage = $"DROPPED {entry.Definition.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
     // Ticks gameplay Movement each frame and keeps related timers and state synchronized.
     private void UpdateGameplayMovement(KeyboardState keyboard, GameTime gameTime)
     {
@@ -237,6 +318,37 @@ public sealed partial class FarmGame
     // Ticks inventory Navigation each frame and keeps related timers and state synchronized.
     private void UpdateInventoryNavigation(bool moveLeft, bool moveRight, bool moveUp, bool moveDown)
     {
+        if (_isInventoryActionMenuOpen)
+        {
+            if (_selectedInventoryIndex < 0 || _selectedInventoryIndex >= _inventoryItems.Count)
+            {
+                _isInventoryActionMenuOpen = false;
+                _selectedInventoryActionIndex = 0;
+                return;
+            }
+
+            InventoryEntry selectedEntry = _inventoryItems[_selectedInventoryIndex];
+            List<string> actions = GetInventoryActions(selectedEntry.Definition);
+            if (actions.Count <= 0)
+            {
+                _isInventoryActionMenuOpen = false;
+                _selectedInventoryActionIndex = 0;
+                return;
+            }
+
+            if (moveUp || moveLeft)
+            {
+                _selectedInventoryActionIndex = Math.Max(0, _selectedInventoryActionIndex - 1);
+            }
+
+            if (moveDown || moveRight)
+            {
+                _selectedInventoryActionIndex = Math.Min(actions.Count - 1, _selectedInventoryActionIndex + 1);
+            }
+
+            return;
+        }
+
         if (_inventoryItems.Count == 0)
         {
             _selectedInventoryIndex = 0;
@@ -419,19 +531,39 @@ public sealed partial class FarmGame
         OpenBuildingTalk(_interactTarget);
     }
 
+    // Attempts to pick up the nearest dropped world item currently in interaction range.
+    private bool TryPickUpNearbyDroppedWorldItem()
+    {
+        if (_nearbyDroppedItemIndex < 0 || _nearbyDroppedItemIndex >= _droppedWorldItems.Count)
+        {
+            return false;
+        }
+
+        DroppedWorldItem dropped = _droppedWorldItems[_nearbyDroppedItemIndex];
+        if (!CanAddInventoryItem(dropped.Definition))
+        {
+            _interactionMessage = "INVENTORY FULL";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return true;
+        }
+
+        if (!AddInventoryItem(dropped.Definition, 1))
+        {
+            return true;
+        }
+
+        _droppedWorldItems.RemoveAt(_nearbyDroppedItemIndex);
+        _nearbyDroppedItemIndex = -1;
+        _interactionMessage = $"PICKED UP {dropped.Definition.Name.ToUpperInvariant()}";
+        _interactionMessageTimer = InteractionMessageDuration;
+        return true;
+    }
+
     // Attempts to use Ditto's selected Cut/Rock Smash skill on a facing building.
     private void TryUseActiveSkillOnBuilding()
     {
         if (_interactTarget is null)
         {
-            return;
-        }
-
-        if (!CanAddInventoryItem(_interactTarget.Definition))
-        {
-            // TO DO REMOVE: For now, block skill building destruction when inventory cannot hold the dropped building item.
-            _interactionMessage = "INVENTORY FULL";
-            _interactionMessageTimer = InteractionMessageDuration;
             return;
         }
 
@@ -466,17 +598,68 @@ public sealed partial class FarmGame
         }
 
         PlacedItem building = _placedItems[buildingIndex];
-        if (!AddInventoryItem(building.Definition, 1))
+
+        _placedItems.RemoveAt(buildingIndex);
+        DropStoredItemsFromDestroyedBuilding(building);
+        Vector2 dropOrigin = new(building.Bounds.Center.X, building.Bounds.Center.Y);
+        if (TryFindDroppedItemSpawnBounds(dropOrigin, building.Definition, out Rectangle dropBounds))
+        {
+            _droppedWorldItems.Add(new DroppedWorldItem(dropBounds, building.Definition, _elapsedWorldTimeSeconds));
+        }
+        _activeSkillDamageTarget = null;
+        _activeSkillDamageAmount = 0;
+        _interactTarget = null;
+        _interactionMessage = $"{building.Definition.Name.ToUpperInvariant()} DROPPED";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Drops stored outputs/materials from a destroyed building onto the ground.
+    private void DropStoredItemsFromDestroyedBuilding(PlacedItem building)
+    {
+        Vector2 dropOrigin = new(building.Bounds.Center.X, building.Bounds.Center.Y);
+
+        if (building.Definition == ItemCatalog.Chest)
+        {
+            foreach (InventoryEntry storedEntry in GetStoredItems(building))
+            {
+                DropWorldItemQuantity(dropOrigin, storedEntry.Definition, storedEntry.Quantity);
+            }
+        }
+
+        if (building.Definition.IsResourceProduction)
+        {
+            ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
+            if (producedMaterial is not null && building.StoredProducedUnits > 0)
+            {
+                DropWorldItemQuantity(dropOrigin, producedMaterial, building.StoredProducedUnits);
+            }
+        }
+
+        if (building.Definition == ItemCatalog.WorkBench &&
+            building.WorkbenchStoredItem is not null &&
+            building.WorkbenchStoredQuantity > 0)
+        {
+            DropWorldItemQuantity(dropOrigin, building.WorkbenchStoredItem, building.WorkbenchStoredQuantity);
+        }
+    }
+
+    // Drops a stack quantity as individual world items using the normal spread placement rules.
+    private void DropWorldItemQuantity(Vector2 dropOrigin, ItemDefinition definition, int quantity)
+    {
+        if (quantity <= 0)
         {
             return;
         }
 
-        _placedItems.RemoveAt(buildingIndex);
-        _activeSkillDamageTarget = null;
-        _activeSkillDamageAmount = 0;
-        _interactTarget = null;
-        _interactionMessage = $"{building.Definition.Name.ToUpperInvariant()} DESTROYED";
-        _interactionMessageTimer = InteractionMessageDuration;
+        for (int index = 0; index < quantity; index++)
+        {
+            if (!TryFindDroppedItemSpawnBounds(dropOrigin, definition, out Rectangle dropBounds))
+            {
+                break;
+            }
+
+            _droppedWorldItems.Add(new DroppedWorldItem(dropBounds, definition, _elapsedWorldTimeSeconds));
+        }
     }
 
     // Attempts to talk With Pokemon and reports success so callers can handle failure without exceptions.
@@ -777,6 +960,82 @@ public sealed partial class FarmGame
         }
 
         return -1;
+    }
+
+    // Finds the closest dropped item currently inside the player's facing interaction area.
+    private int FindNearbyDroppedWorldItemIndex()
+    {
+        Rectangle searchArea = GetFacingInteractionArea();
+        Vector2 playerCenter = new(_playerPosition.X + (PlayerSize / 2f), _playerPosition.Y + (PlayerSize / 2f));
+        int bestIndex = -1;
+        float bestDistanceSquared = float.MaxValue;
+
+        for (int index = 0; index < _droppedWorldItems.Count; index++)
+        {
+            DroppedWorldItem dropped = _droppedWorldItems[index];
+            if (!dropped.Bounds.Intersects(searchArea))
+            {
+                continue;
+            }
+
+            Vector2 dropCenter = new(dropped.Bounds.Center.X, dropped.Bounds.Center.Y);
+            float distanceSquared = Vector2.DistanceSquared(playerCenter, dropCenter);
+            if (distanceSquared < bestDistanceSquared)
+            {
+                bestDistanceSquared = distanceSquared;
+                bestIndex = index;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    // Attempts to find a valid, slightly spread-out ground-drop location for an item.
+    private bool TryFindDroppedItemSpawnBounds(Vector2 originPosition, ItemDefinition definition, out Rectangle dropBounds)
+    {
+        Point dropSize = new(
+            Math.Max(14, definition.Size.X / 2),
+            Math.Max(14, definition.Size.Y / 2));
+        Rectangle playableArea = new(
+            BorderThickness,
+            BorderThickness,
+            _worldBounds.Width - (BorderThickness * 2),
+            _worldBounds.Height - (BorderThickness * 2));
+        int[] radii = [0, 16, 28, 40, 56];
+
+        foreach (int radius in radii)
+        {
+            foreach (Point offset in GetSpawnOffsets(radius))
+            {
+                Rectangle candidate = new(
+                    (int)originPosition.X - (dropSize.X / 2) + offset.X,
+                    (int)originPosition.Y - (dropSize.Y / 2) + offset.Y,
+                    dropSize.X,
+                    dropSize.Y);
+                if (!playableArea.Contains(candidate))
+                {
+                    continue;
+                }
+
+                bool intersectsBuilding = _placedItems.Any(item => item.Definition.HasCollision && item.Bounds.Intersects(candidate));
+                if (intersectsBuilding)
+                {
+                    continue;
+                }
+
+                bool intersectsDropped = _droppedWorldItems.Any(item => item.Bounds.Intersects(candidate));
+                if (intersectsDropped)
+                {
+                    continue;
+                }
+
+                dropBounds = candidate;
+                return true;
+            }
+        }
+
+        dropBounds = Rectangle.Empty;
+        return false;
     }
 
     // Computes and returns facing Interaction Area without mutating persistent game state.

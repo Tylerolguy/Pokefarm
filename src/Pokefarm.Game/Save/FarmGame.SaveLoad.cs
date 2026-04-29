@@ -339,6 +339,7 @@ public sealed partial class FarmGame
     private void ResetWorldToNewGameDefaults()
     {
         _placedItems.Clear();
+        _droppedWorldItems.Clear();
         _spawnedDittos.Clear();
         _inventoryItems.Clear();
         _unlockedRecipes.Clear();
@@ -442,6 +443,15 @@ public sealed partial class FarmGame
             NextConstructionSiteId = _nextConstructionSiteId,
             InventoryItems = _inventoryItems.Select(entry => new SavedInventoryEntry(entry.Definition.Name, entry.Quantity)).ToList(),
             PlacedItems = _placedItems.Select(ToSavedPlacedItem).ToList(),
+            DroppedWorldItems = _droppedWorldItems.Select(item => new SavedDroppedWorldItem
+            {
+                X = item.Bounds.X,
+                Y = item.Bounds.Y,
+                Width = item.Bounds.Width,
+                Height = item.Bounds.Height,
+                DefinitionName = item.Definition.Name,
+                DroppedAtWorldTimeSeconds = item.DroppedAtWorldTimeSeconds
+            }).ToList(),
             SpawnedPokemon = _spawnedDittos.Select(ToSavedPokemon).ToList(),
             StoredPcPokemonNames = [.. _storedPcPokemonNames],
             ActiveQuests = _activeQuests.Select(quest => quest.Name).ToList(),
@@ -532,6 +542,7 @@ public sealed partial class FarmGame
         ResetWorldToNewGameDefaults();
         List<SavedInventoryEntry> inventoryEntries = data.InventoryItems ?? [];
         List<SavedPlacedItem> placedItems = data.PlacedItems ?? [];
+        List<SavedDroppedWorldItem> droppedWorldItems = data.DroppedWorldItems ?? [];
         List<SavedSpawnedPokemon> spawnedPokemon = data.SpawnedPokemon ?? [];
         List<string> storedPcNames = data.StoredPcPokemonNames ?? [];
         List<string> activeQuestNames = data.ActiveQuests ?? [];
@@ -659,6 +670,20 @@ public sealed partial class FarmGame
                 savedPokemon.IdleCyclePauseRemaining));
         }
 
+        _droppedWorldItems.Clear();
+        foreach (SavedDroppedWorldItem dropped in droppedWorldItems)
+        {
+            if (!TryResolveItem(dropped.DefinitionName, out ItemDefinition definition))
+            {
+                continue;
+            }
+
+            _droppedWorldItems.Add(new DroppedWorldItem(
+                new Rectangle(dropped.X, dropped.Y, dropped.Width, dropped.Height),
+                definition,
+                dropped.DroppedAtWorldTimeSeconds));
+        }
+
         _storedPcPokemonNames.Clear();
         _storedPcPokemonNames.AddRange(storedPcNames.Where(name => !string.IsNullOrWhiteSpace(name)));
 
@@ -762,6 +787,7 @@ internal sealed class GameSaveData
     public int NextConstructionSiteId { get; set; } = 1;
     public List<SavedInventoryEntry> InventoryItems { get; set; } = [];
     public List<SavedPlacedItem> PlacedItems { get; set; } = [];
+    public List<SavedDroppedWorldItem> DroppedWorldItems { get; set; } = [];
     public List<SavedSpawnedPokemon> SpawnedPokemon { get; set; } = [];
     public List<string> StoredPcPokemonNames { get; set; } = [];
     public List<string> ActiveQuests { get; set; } = [];
@@ -825,6 +851,16 @@ internal sealed class SavedPlacedItem
     public bool IsConstructionSite { get; set; }
     public int? ConstructionSiteId { get; set; }
     public float ConstructionEffort { get; set; }
+}
+
+internal sealed class SavedDroppedWorldItem
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public string DefinitionName { get; set; } = string.Empty;
+    public double DroppedAtWorldTimeSeconds { get; set; }
 }
 
 internal sealed class SavedSpawnedPokemon
