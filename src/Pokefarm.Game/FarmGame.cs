@@ -596,6 +596,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 else if (TryPickUpNearbyDroppedWorldItem())
                 {
                 }
+                else if (_interactTarget?.Definition.Kind == ItemKind.Debris)
+                {
+                    TryUseActiveSkillOnBuilding();
+                }
                 else if (IsBuildingDamageSkillSelected())
                 {
                     TryUseActiveSkillOnBuilding();

@@ -567,6 +567,20 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (_interactTarget.Definition == ItemCatalog.LogsDebris && _activeDittoSkill != SkillType.Cut)
+        {
+            _interactionMessage = "CUT REQUIRED";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        if (_interactTarget.Definition == ItemCatalog.BoulderDebris && _activeDittoSkill != SkillType.RockSmash)
+        {
+            _interactionMessage = "ROCK SMASH REQUIRED";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
         if (_activeSkillDamageTarget is null || _activeSkillDamageTarget != _interactTarget)
         {
             _activeSkillDamageTarget = _interactTarget;
@@ -602,14 +616,17 @@ public sealed partial class FarmGame
         _placedItems.RemoveAt(buildingIndex);
         DropStoredItemsFromDestroyedBuilding(building);
         Vector2 dropOrigin = new(building.Bounds.Center.X, building.Bounds.Center.Y);
-        if (TryFindDroppedItemSpawnBounds(dropOrigin, building.Definition, out Rectangle dropBounds))
+        if (building.Definition.Kind != ItemKind.Debris &&
+            TryFindDroppedItemSpawnBounds(dropOrigin, building.Definition, out Rectangle dropBounds))
         {
             _droppedWorldItems.Add(new DroppedWorldItem(dropBounds, building.Definition, _elapsedWorldTimeSeconds));
         }
         _activeSkillDamageTarget = null;
         _activeSkillDamageAmount = 0;
         _interactTarget = null;
-        _interactionMessage = $"{building.Definition.Name.ToUpperInvariant()} DROPPED";
+        _interactionMessage = building.Definition.Kind == ItemKind.Debris
+            ? $"{building.Definition.Name.ToUpperInvariant()} CLEARED"
+            : $"{building.Definition.Name.ToUpperInvariant()} DROPPED";
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
@@ -617,6 +634,24 @@ public sealed partial class FarmGame
     private void DropStoredItemsFromDestroyedBuilding(PlacedItem building)
     {
         Vector2 dropOrigin = new(building.Bounds.Center.X, building.Bounds.Center.Y);
+
+        if (building.Definition == ItemCatalog.LogsDebris)
+        {
+            int woodQuantity = GetStoredItems(building)
+                .Where(entry => entry.Definition == ItemCatalog.Wood)
+                .Sum(entry => entry.Quantity);
+            DropWorldItemQuantity(dropOrigin, ItemCatalog.Wood, woodQuantity);
+            return;
+        }
+
+        if (building.Definition == ItemCatalog.BoulderDebris)
+        {
+            int stoneQuantity = GetStoredItems(building)
+                .Where(entry => entry.Definition == ItemCatalog.Stone)
+                .Sum(entry => entry.Quantity);
+            DropWorldItemQuantity(dropOrigin, ItemCatalog.Stone, stoneQuantity);
+            return;
+        }
 
         if (building.Definition == ItemCatalog.Chest)
         {
