@@ -382,10 +382,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         bool cycleSkillPressed = keyboard.IsKeyDown(Keys.C) && !_previousKeyboard.IsKeyDown(Keys.C);
         bool talkPressed = keyboard.IsKeyDown(Keys.Q) && !_previousKeyboard.IsKeyDown(Keys.Q);
         bool hitboxModePressed = keyboard.IsKeyDown(Keys.H) && !_previousKeyboard.IsKeyDown(Keys.H);
-        bool moveLeftPressed = keyboard.IsKeyDown(Keys.A) && !_previousKeyboard.IsKeyDown(Keys.A);
-        bool moveRightPressed = keyboard.IsKeyDown(Keys.D) && !_previousKeyboard.IsKeyDown(Keys.D);
-        bool moveUpPressed = keyboard.IsKeyDown(Keys.W) && !_previousKeyboard.IsKeyDown(Keys.W);
-        bool moveDownPressed = keyboard.IsKeyDown(Keys.S) && !_previousKeyboard.IsKeyDown(Keys.S);
+        bool moveLeftPressed = keyboard.IsKeyDown(Keys.Left) && !_previousKeyboard.IsKeyDown(Keys.Left);
+        bool moveRightPressed = keyboard.IsKeyDown(Keys.Right) && !_previousKeyboard.IsKeyDown(Keys.Right);
+        bool moveUpPressed = keyboard.IsKeyDown(Keys.Up) && !_previousKeyboard.IsKeyDown(Keys.Up);
+        bool moveDownPressed = keyboard.IsKeyDown(Keys.Down) && !_previousKeyboard.IsKeyDown(Keys.Down);
 
         if (_bootFlowState != BootFlowState.Playing)
         {

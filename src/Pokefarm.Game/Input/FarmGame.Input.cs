@@ -141,22 +141,22 @@ public sealed partial class FarmGame
         float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
         Vector2 previewMovement = Vector2.Zero;
 
-        if (keyboard.IsKeyDown(Keys.A) && !moveLeftPressed)
+        if (keyboard.IsKeyDown(Keys.Left) && !moveLeftPressed)
         {
             previewMovement.X -= 1f;
         }
 
-        if (keyboard.IsKeyDown(Keys.D) && !moveRightPressed)
+        if (keyboard.IsKeyDown(Keys.Right) && !moveRightPressed)
         {
             previewMovement.X += 1f;
         }
 
-        if (keyboard.IsKeyDown(Keys.W) && !moveUpPressed)
+        if (keyboard.IsKeyDown(Keys.Up) && !moveUpPressed)
         {
             previewMovement.Y -= 1f;
         }
 
-        if (keyboard.IsKeyDown(Keys.S) && !moveDownPressed)
+        if (keyboard.IsKeyDown(Keys.Down) && !moveDownPressed)
         {
             previewMovement.Y += 1f;
         }
@@ -271,22 +271,22 @@ public sealed partial class FarmGame
         float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
         Vector2 movement = Vector2.Zero;
 
-        if (keyboard.IsKeyDown(Keys.W))
+        if (keyboard.IsKeyDown(Keys.Up))
         {
             movement.Y -= 1f;
         }
 
-        if (keyboard.IsKeyDown(Keys.S))
+        if (keyboard.IsKeyDown(Keys.Down))
         {
             movement.Y += 1f;
         }
 
-        if (keyboard.IsKeyDown(Keys.A))
+        if (keyboard.IsKeyDown(Keys.Left))
         {
             movement.X -= 1f;
         }
 
-        if (keyboard.IsKeyDown(Keys.D))
+        if (keyboard.IsKeyDown(Keys.Right))
         {
             movement.X += 1f;
         }

@@ -1071,7 +1071,7 @@ public sealed partial class FarmGame
 
             string selectedSkillDescription = GetDittoSkillDescription(_selectedDittoSkillSlotIndex);
             DrawPixelText(selectedSkillDescription, new Vector2(panel.X + 24, panel.Bottom - 62), new Color(210, 190, 164));
-            DrawPixelText("WASD MOVE  E CLOSE", new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
+            DrawPixelText("ARROWS MOVE  E CLOSE", new Vector2(panel.X + 24, panel.Bottom - 32), new Color(210, 190, 164));
             return;
         }
 
