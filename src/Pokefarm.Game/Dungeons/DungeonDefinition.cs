@@ -6,4 +6,6 @@ internal sealed record DungeonDefinition(
     int MinRoomCount,
     int MaxRoomCount,
     int RequiredTeleportingSkill,
-    IReadOnlyList<DungeonRoomDefinition> RoomPool);
+    IReadOnlyList<DungeonRoomDefinition> RoomPool,
+    bool IsPredetermined = false,
+    string? PredeterminedLayoutId = null);

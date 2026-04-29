@@ -1,3 +1,5 @@
+using Microsoft.Xna.Framework;
+
 namespace Pokefarm.Game;
 
 // Static helper for dungeon Generator logic shared across the game loop.
@@ -6,9 +8,23 @@ internal static class DungeonGenerator
     // Builds generate from current inputs for downstream gameplay logic.
     public static GeneratedDungeon Generate(DungeonDefinition definition)
     {
+        if (definition.IsPredetermined && string.Equals(definition.PredeterminedLayoutId, "tutorial", StringComparison.OrdinalIgnoreCase))
+        {
+            List<GeneratedDungeonRoom> tutorialRooms =
+            [
+                new GeneratedDungeonRoom(1, new DungeonRoomDefinition("Tutorial Room 1", DungeonRoomType.Reward, CreatePlaceholderTemplate())),
+                new GeneratedDungeonRoom(2, new DungeonRoomDefinition("Tutorial Room 2", DungeonRoomType.Reward, CreatePlaceholderTemplate())),
+                new GeneratedDungeonRoom(3, new DungeonRoomDefinition("Tutorial Junction", DungeonRoomType.Puzzle, CreatePlaceholderTemplate())),
+                new GeneratedDungeonRoom(4, new DungeonRoomDefinition("Upper Path", DungeonRoomType.Trap, CreatePlaceholderTemplate())),
+                new GeneratedDungeonRoom(5, new DungeonRoomDefinition("Lower Path", DungeonRoomType.Enemy, CreatePlaceholderTemplate()))
+            ];
+            (List<string> layoutRows, Point playerStartTile) = DungeonLayoutBuilder.BuildTutorialLayout();
+            return new GeneratedDungeon(definition.Name, tutorialRooms, layoutRows, playerStartTile);
+        }
+
         if (definition.RoomPool.Count == 0)
         {
-            return new GeneratedDungeon(definition.Name, []);
+            return new GeneratedDungeon(definition.Name, [], [new string('#', 8)], Point.Zero);
         }
 
         List<DungeonRoomDefinition> validRooms = [];
@@ -22,7 +38,7 @@ internal static class DungeonGenerator
 
         if (validRooms.Count == 0)
         {
-            return new GeneratedDungeon(definition.Name, []);
+            return new GeneratedDungeon(definition.Name, [], [new string('#', 8)], Point.Zero);
         }
 
         int minRooms = Math.Max(1, definition.MinRoomCount);
@@ -45,7 +61,18 @@ internal static class DungeonGenerator
             rooms.Add(new GeneratedDungeonRoom(index + 1, room));
         }
 
-        return new GeneratedDungeon(definition.Name, rooms);
+        (List<string> generatedLayoutRows, Point generatedStart) = DungeonLayoutBuilder.BuildLinearLayout(rooms);
+        return new GeneratedDungeon(definition.Name, rooms, generatedLayoutRows, generatedStart);
+    }
+
+    private static DungeonRoomTemplate CreatePlaceholderTemplate()
+    {
+        return new DungeonRoomTemplate(
+            new Point(8, 6),
+            ["########", "#......#", "#......#", "#......#", "#......#", "########"],
+            [],
+            [],
+            []);
     }
 
     // Handles pick Weighted Room for this gameplay subsystem.

@@ -36,6 +36,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private const float PreviewMoveSpeed = 260f;
     private const float PreviewMaxDistance = 180f;
     private const int TileSize = PlayerSize;
+    private const int DungeonTileSize = 32;
     private const int DefaultIconSize = 64;
     private const int WorldWidth = 1280;
     private const int WorldHeight = 720;
@@ -107,6 +108,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     ];
     private readonly List<DungeonDefinition> _availableDungeons =
     [
+        DungeonCatalog.TutorialCavern,
         DungeonCatalog.MysteryGrove
     ];
     private readonly List<string> _storedPcPokemonNames = [];
@@ -159,7 +161,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _selectedPcStorageActionIndex;
     private GeneratedDungeon? _generatedDungeonPreview;
     private GeneratedDungeon? _activeDungeonRun;
-    private int _activeDungeonRoomIndex = -1;
     private int _activeDungeonPortalIndex = -1;
     private int _activeChestIndex = -1;
     private bool _isChestSelectionOnChest = true;
@@ -592,7 +593,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             {
                 if (_activeDungeonRun is not null)
                 {
-                    AdvanceDungeonRoomOrExit();
+                    // Dungeons are traversed as connected maps now; E no longer advances rooms.
                 }
                 else if (TryPickUpNearbyDroppedWorldItem())
                 {
@@ -617,14 +618,29 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
         }
 
-        _playerPosition.X = MathHelper.Clamp(
-            _playerPosition.X,
-            BorderThickness,
-            _worldBounds.Width - BorderThickness - PlayerSize);
-        _playerPosition.Y = MathHelper.Clamp(
-            _playerPosition.Y,
-            BorderThickness,
-            _worldBounds.Height - BorderThickness - PlayerSize);
+        if (_activeDungeonRun is not null)
+        {
+            Rectangle dungeonBounds = GetActiveDungeonMapBounds(_activeDungeonRun);
+            _playerPosition.X = MathHelper.Clamp(
+                _playerPosition.X,
+                dungeonBounds.Left,
+                dungeonBounds.Right - PlayerSize);
+            _playerPosition.Y = MathHelper.Clamp(
+                _playerPosition.Y,
+                dungeonBounds.Top,
+                dungeonBounds.Bottom - PlayerSize);
+        }
+        else
+        {
+            _playerPosition.X = MathHelper.Clamp(
+                _playerPosition.X,
+                BorderThickness,
+                _worldBounds.Width - BorderThickness - PlayerSize);
+            _playerPosition.Y = MathHelper.Clamp(
+                _playerPosition.Y,
+                BorderThickness,
+                _worldBounds.Height - BorderThickness - PlayerSize);
+        }
 
         UpdateExpiredSnacks();
         UpdateDittoWorkingDialogue(deltaTime);
@@ -731,20 +747,23 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private void UpdateCamera()
     {
         Viewport viewport = GraphicsDevice.Viewport;
-        float maxCameraX = Math.Max(0f, _worldBounds.Width - viewport.Width);
-        float maxCameraY = Math.Max(0f, _worldBounds.Height - viewport.Height);
+        Rectangle cameraBounds = _activeDungeonRun is not null
+            ? GetActiveDungeonMapBounds(_activeDungeonRun)
+            : _worldBounds;
+        float maxCameraX = Math.Max(0f, cameraBounds.Width - viewport.Width);
+        float maxCameraY = Math.Max(0f, cameraBounds.Height - viewport.Height);
 
         float cameraX = MathHelper.Clamp(
-            _playerPosition.X + (PlayerSize / 2f) - (viewport.Width / 2f),
+            _playerPosition.X + (PlayerSize / 2f) - (viewport.Width / 2f) - cameraBounds.Left,
             0f,
             maxCameraX);
         float cameraY = MathHelper.Clamp(
-            _playerPosition.Y + (PlayerSize / 2f) - (viewport.Height / 2f),
+            _playerPosition.Y + (PlayerSize / 2f) - (viewport.Height / 2f) - cameraBounds.Top,
             0f,
             maxCameraY);
 
         float dialogueShift = _dialogueTransition * DialogueGameplayShift;
-        _cameraMatrix = Matrix.CreateTranslation(-cameraX, -cameraY - dialogueShift, 0f);
+        _cameraMatrix = Matrix.CreateTranslation(-(cameraBounds.Left + cameraX), -(cameraBounds.Top + cameraY) - dialogueShift, 0f);
     }
 
     // Handles collides With Placed Item for this gameplay subsystem.
@@ -752,7 +771,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     {
         if (_activeDungeonRun is not null)
         {
-            return false;
+            bool dungeonPlayerIsWalking = _playerMovement != Vector2.Zero;
+            int dungeonPlayerIdleFrame = !dungeonPlayerIsWalking && _playerIdleStationaryTimer >= PlayerIdleStartDelaySeconds
+                ? _playerIdleAnimationFrame
+                : 0;
+            Rectangle dungeonPlayerBounds = GetPokemonHitbox(
+                playerTopLeft,
+                PlayerPokemonName,
+                _playerDirection,
+                dungeonPlayerIsWalking,
+                _walkAnimationFrame,
+                dungeonPlayerIdleFrame);
+            return CollidesWithActiveDungeonMap(dungeonPlayerBounds);
         }
 
         bool playerIsWalking = _playerMovement != Vector2.Zero;
@@ -1315,6 +1345,69 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         return false;
+    }
+
+    // Checks whether the player bounds intersect active dungeon walls/obstacles on the connected tile map.
+    private bool CollidesWithActiveDungeonMap(Rectangle playerBounds)
+    {
+        if (_activeDungeonRun is null || _activeDungeonRun.LayoutRows.Count == 0)
+        {
+            return false;
+        }
+
+        Point mapOrigin = GetActiveDungeonMapOrigin(_activeDungeonRun);
+        int mapHeight = _activeDungeonRun.LayoutRows.Count;
+        int mapWidth = _activeDungeonRun.LayoutRows[0].Length;
+
+        int minTileX = Math.Max(0, (playerBounds.Left - mapOrigin.X) / DungeonTileSize);
+        int maxTileX = Math.Min(mapWidth - 1, (playerBounds.Right - 1 - mapOrigin.X) / DungeonTileSize);
+        int minTileY = Math.Max(0, (playerBounds.Top - mapOrigin.Y) / DungeonTileSize);
+        int maxTileY = Math.Min(mapHeight - 1, (playerBounds.Bottom - 1 - mapOrigin.Y) / DungeonTileSize);
+
+        for (int tileY = minTileY; tileY <= maxTileY; tileY++)
+        {
+            for (int tileX = minTileX; tileX <= maxTileX; tileX++)
+            {
+                char tile = _activeDungeonRun.LayoutRows[tileY][tileX];
+                if (tile != '#')
+                {
+                    continue;
+                }
+
+                Rectangle tileBounds = new(
+                    mapOrigin.X + (tileX * DungeonTileSize),
+                    mapOrigin.Y + (tileY * DungeonTileSize),
+                    DungeonTileSize,
+                    DungeonTileSize);
+                if (playerBounds.Intersects(tileBounds))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // Computes top-left world pixel origin for drawing/collision of the active dungeon tile map.
+    private Point GetActiveDungeonMapOrigin(GeneratedDungeon dungeon)
+    {
+        int mapWidthPixels = dungeon.LayoutRows[0].Length * DungeonTileSize;
+        int mapHeightPixels = dungeon.LayoutRows.Count * DungeonTileSize;
+        int originX = (_worldBounds.Width - mapWidthPixels) / 2;
+        int originY = (_worldBounds.Height - mapHeightPixels) / 2;
+        return new Point(originX, originY);
+    }
+
+    // Computes world-space bounds rectangle for the active dungeon map.
+    private Rectangle GetActiveDungeonMapBounds(GeneratedDungeon dungeon)
+    {
+        Point origin = GetActiveDungeonMapOrigin(dungeon);
+        return new Rectangle(
+            origin.X,
+            origin.Y,
+            dungeon.LayoutRows[0].Length * DungeonTileSize,
+            dungeon.LayoutRows.Count * DungeonTileSize);
     }
 
     // Computes and returns the same sprite-aligned bounds used by hitbox display, falling back to logical bounds when data is unavailable.

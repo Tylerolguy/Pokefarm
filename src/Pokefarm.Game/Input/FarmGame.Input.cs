@@ -1995,7 +1995,7 @@ public sealed partial class FarmGame
 
         DungeonDefinition dungeonDefinition = _availableDungeons[_selectedDungeonIndex];
         int currentTeleportingSkill = GetDungeonPortalTeleportingSkillTotal();
-        int requiredTeleportingSkill = Math.Max(1, dungeonDefinition.RequiredTeleportingSkill);
+        int requiredTeleportingSkill = Math.Max(0, dungeonDefinition.RequiredTeleportingSkill);
         if (currentTeleportingSkill < requiredTeleportingSkill)
         {
             _interactionMessage = $"NEED TELEPORTING {requiredTeleportingSkill}";
@@ -2054,34 +2054,13 @@ public sealed partial class FarmGame
     private void EnterDungeonRun(GeneratedDungeon dungeonRun)
     {
         _activeDungeonRun = dungeonRun;
-        _activeDungeonRoomIndex = 0;
         _inputMode = InputMode.Gameplay;
         _interactTarget = null;
         _talkTargetIndex = -1;
+        Point mapOrigin = GetActiveDungeonMapOrigin(dungeonRun);
         _playerPosition = new Vector2(
-            _worldBounds.Center.X - (PlayerSize / 2f),
-            _worldBounds.Center.Y - (PlayerSize / 2f));
-    }
-
-    // Handles advance Dungeon Room Or Exit for this gameplay subsystem.
-    private void AdvanceDungeonRoomOrExit()
-    {
-        if (_activeDungeonRun is null)
-        {
-            return;
-        }
-
-        int nextRoomIndex = _activeDungeonRoomIndex + 1;
-        if (nextRoomIndex >= _activeDungeonRun.Rooms.Count)
-        {
-            LeaveActiveDungeonRun("LEFT");
-            return;
-        }
-
-        _activeDungeonRoomIndex = nextRoomIndex;
-        GeneratedDungeonRoom room = _activeDungeonRun.Rooms[_activeDungeonRoomIndex];
-        _interactionMessage = $"ROOM {_activeDungeonRoomIndex + 1}: {room.Definition.Name.ToUpperInvariant()}";
-        _interactionMessageTimer = InteractionMessageDuration;
+            mapOrigin.X + (dungeonRun.PlayerStartTile.X * DungeonTileSize),
+            mapOrigin.Y + (dungeonRun.PlayerStartTile.Y * DungeonTileSize));
     }
 
     // Handles leave Active Dungeon Run for this gameplay subsystem.
@@ -2094,7 +2073,6 @@ public sealed partial class FarmGame
 
         string dungeonName = _activeDungeonRun.DungeonName;
         _activeDungeonRun = null;
-        _activeDungeonRoomIndex = -1;
         _inputMode = InputMode.Gameplay;
         _interactTarget = null;
         _talkTargetIndex = -1;

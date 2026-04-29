@@ -374,6 +374,7 @@ public sealed partial class FarmGame
             QuestCatalog.BuildYourFarm
         ]);
 
+        _availableDungeons.Add(DungeonCatalog.TutorialCavern);
         _availableDungeons.Add(DungeonCatalog.MysteryGrove);
 
         Point pcSize = ItemCatalog.Pc.Size;
@@ -449,7 +450,6 @@ public sealed partial class FarmGame
         _activeFarmIndex = -1;
         _activePcIndex = -1;
         _activeChestIndex = -1;
-        _activeDungeonRoomIndex = -1;
         _activeDungeonPortalIndex = -1;
         _activeDungeonRun = null;
         _generatedDungeonPreview = null;
@@ -740,7 +740,11 @@ public sealed partial class FarmGame
         _availableDungeons.Clear();
         foreach (string dungeonName in availableDungeonNames)
         {
-            if (string.Equals(dungeonName, DungeonCatalog.MysteryGrove.Name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(dungeonName, DungeonCatalog.TutorialCavern.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                _availableDungeons.Add(DungeonCatalog.TutorialCavern);
+            }
+            else if (string.Equals(dungeonName, DungeonCatalog.MysteryGrove.Name, StringComparison.OrdinalIgnoreCase))
             {
                 _availableDungeons.Add(DungeonCatalog.MysteryGrove);
             }
@@ -748,6 +752,7 @@ public sealed partial class FarmGame
 
         if (_availableDungeons.Count == 0)
         {
+            _availableDungeons.Add(DungeonCatalog.TutorialCavern);
             _availableDungeons.Add(DungeonCatalog.MysteryGrove);
         }
 

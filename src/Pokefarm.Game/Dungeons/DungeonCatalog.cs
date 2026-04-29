@@ -5,11 +5,21 @@ namespace Pokefarm.Game;
 // Static helper for dungeon Catalog logic shared across the game loop.
 internal static class DungeonCatalog
 {
+    public static readonly DungeonDefinition TutorialCavern = new(
+        "Tutorial Cavern",
+        5,
+        5,
+        0,
+        IsPredetermined: true,
+        PredeterminedLayoutId: "tutorial",
+        RoomPool: []);
+
     public static readonly DungeonDefinition MysteryGrove = new(
         "Mystery Grove",
         4,
         7,
         1,
+        RoomPool:
         [
             new DungeonRoomDefinition(
                 "Abandoned Camp",

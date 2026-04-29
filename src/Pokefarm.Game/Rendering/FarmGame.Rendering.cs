@@ -60,107 +60,37 @@ public sealed partial class FarmGame
         {
             return;
         }
-
-        Color roomBackground = new Color(48, 48, 54);
-        Color wallColor = new Color(26, 26, 30);
-        Color accentColor = new Color(136, 136, 144);
-        GeneratedDungeonRoom? activeRoom = GetActiveDungeonRoom();
-
-        if (activeRoom is not null)
-        {
-            DungeonRoomTemplate template = activeRoom.Definition.Template;
-            switch (activeRoom.Definition.Type)
-            {
-                case DungeonRoomType.Reward:
-                    roomBackground = new Color(72, 86, 60);
-                    wallColor = new Color(38, 44, 30);
-                    accentColor = new Color(182, 206, 128);
-                    break;
-                case DungeonRoomType.Trap:
-                    roomBackground = new Color(96, 64, 56);
-                    wallColor = new Color(52, 30, 26);
-                    accentColor = new Color(216, 130, 104);
-                    break;
-                case DungeonRoomType.Puzzle:
-                    roomBackground = new Color(68, 72, 100);
-                    wallColor = new Color(36, 40, 58);
-                    accentColor = new Color(146, 166, 228);
-                    break;
-                case DungeonRoomType.Enemy:
-                    roomBackground = new Color(90, 54, 94);
-                    wallColor = new Color(46, 24, 52);
-                    accentColor = new Color(196, 128, 210);
-                    break;
-            }
-
-            int tileRenderSize = 48;
-            int roomRenderWidth = template.Size.X * tileRenderSize;
-            int roomRenderHeight = template.Size.Y * tileRenderSize;
-            int roomStartX = _worldBounds.Center.X - (roomRenderWidth / 2);
-            int roomStartY = _worldBounds.Center.Y - (roomRenderHeight / 2);
-
-            for (int y = 0; y < _worldBounds.Height; y += TileSize)
-            {
-                for (int x = 0; x < _worldBounds.Width; x += TileSize)
-                {
-                    _spriteBatch.Draw(_pixel, new Rectangle(x, y, TileSize, TileSize), roomBackground);
-                }
-            }
-
-            Rectangle roomBounds = new(roomStartX, roomStartY, roomRenderWidth, roomRenderHeight);
-            _spriteBatch.Draw(_pixel, roomBounds, new Color(roomBackground.R, roomBackground.G, roomBackground.B, (byte)220));
-            DrawPanelBorder(roomBounds, accentColor);
-
-            for (int y = 0; y < template.Size.Y; y++)
-            {
-                for (int x = 0; x < template.Size.X; x++)
-                {
-                    char tile = template.LayoutRows[y][x];
-                    Rectangle tileRect = new(
-                        roomStartX + (x * tileRenderSize),
-                        roomStartY + (y * tileRenderSize),
-                        tileRenderSize,
-                        tileRenderSize);
-
-                    if (tile == '#')
-                    {
-                        _spriteBatch.Draw(_pixel, tileRect, wallColor);
-                        DrawPanelBorder(tileRect, new Color(18, 18, 22));
-                    }
-                    else
-                    {
-                        _spriteBatch.Draw(_pixel, tileRect, new Color(roomBackground.R, roomBackground.G, roomBackground.B, (byte)160));
-                    }
-                }
-            }
-
-            foreach (DungeonObstacleDefinition obstacle in template.Obstacles)
-            {
-                Rectangle obstacleRect = new(
-                    roomStartX + (obstacle.Position.X * tileRenderSize),
-                    roomStartY + (obstacle.Position.Y * tileRenderSize),
-                    obstacle.Size.X * tileRenderSize,
-                    obstacle.Size.Y * tileRenderSize);
-                _spriteBatch.Draw(_pixel, obstacleRect, new Color(accentColor.R, accentColor.G, accentColor.B, (byte)120));
-                DrawPanelBorder(obstacleRect, accentColor);
-            }
-
-            DrawDungeonSpawnMarkers(template, roomStartX, roomStartY, tileRenderSize);
-            return;
-        }
+        Color floorColor = new(68, 74, 84);
+        Color wallColor = new(24, 28, 34);
+        Color borderColor = new(118, 124, 136);
+        Point mapOrigin = GetActiveDungeonMapOrigin(_activeDungeonRun);
+        int mapHeight = _activeDungeonRun.LayoutRows.Count;
+        int mapWidth = _activeDungeonRun.LayoutRows[0].Length;
 
         for (int y = 0; y < _worldBounds.Height; y += TileSize)
         {
             for (int x = 0; x < _worldBounds.Width; x += TileSize)
             {
-                _spriteBatch.Draw(_pixel, new Rectangle(x, y, TileSize, TileSize), roomBackground);
+                _spriteBatch.Draw(_pixel, new Rectangle(x, y, TileSize, TileSize), wallColor);
             }
         }
 
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, _worldBounds.Width, BorderThickness), wallColor);
-        _spriteBatch.Draw(_pixel, new Rectangle(0, _worldBounds.Height - BorderThickness, _worldBounds.Width, BorderThickness), wallColor);
-        _spriteBatch.Draw(_pixel, new Rectangle(0, 0, BorderThickness, _worldBounds.Height), wallColor);
-        _spriteBatch.Draw(_pixel, new Rectangle(_worldBounds.Width - BorderThickness, 0, BorderThickness, _worldBounds.Height), wallColor);
+        Rectangle mapBounds = new(mapOrigin.X, mapOrigin.Y, mapWidth * DungeonTileSize, mapHeight * DungeonTileSize);
+        DrawPanelBorder(mapBounds, borderColor);
+
+        for (int tileY = 0; tileY < mapHeight; tileY++)
+        {
+            for (int tileX = 0; tileX < mapWidth; tileX++)
+            {
+                char tile = _activeDungeonRun.LayoutRows[tileY][tileX];
+                Rectangle tileRect = new(
+                    mapOrigin.X + (tileX * DungeonTileSize),
+                    mapOrigin.Y + (tileY * DungeonTileSize),
+                    DungeonTileSize,
+                    DungeonTileSize);
+                _spriteBatch.Draw(_pixel, tileRect, tile == '#' ? wallColor : floorColor);
+            }
+        }
     }
 
     // Draws dungeon Spawn Markers for the current frame using the active render context.
@@ -1510,13 +1440,7 @@ public sealed partial class FarmGame
 
         if (_activeDungeonRun is not null)
         {
-            GeneratedDungeonRoom? activeRoom = GetActiveDungeonRoom();
-            if (activeRoom is not null)
-            {
-                string roomText = $"ROOM {_activeDungeonRoomIndex + 1}/{_activeDungeonRun.Rooms.Count} {activeRoom.Definition.Name.ToUpperInvariant()}";
-                DrawPromptPanel(roomText, new Point(GraphicsDevice.Viewport.Width / 2, 48));
-                DrawPromptPanel("PRESS E FOR NEXT ROOM", new Point(GraphicsDevice.Viewport.Width / 2, GraphicsDevice.Viewport.Height - 64));
-            }
+            DrawPromptPanel(_activeDungeonRun.DungeonName.ToUpperInvariant(), new Point(GraphicsDevice.Viewport.Width / 2, 48));
 
             if (!string.IsNullOrEmpty(_interactionMessage))
             {
@@ -1583,19 +1507,6 @@ public sealed partial class FarmGame
         DrawPanelBorder(outer, new Color(236, 220, 196));
         _spriteBatch.Draw(_pixel, inner, iconColor);
         DrawPixelText(GetActiveSkillLabel().ToUpperInvariant(), new Vector2(outer.X - 8, outer.Bottom + 6), new Color(236, 220, 196));
-    }
-
-    // Computes and returns active Dungeon Room without mutating persistent game state.
-    private GeneratedDungeonRoom? GetActiveDungeonRoom()
-    {
-        if (_activeDungeonRun is null ||
-            _activeDungeonRoomIndex < 0 ||
-            _activeDungeonRoomIndex >= _activeDungeonRun.Rooms.Count)
-        {
-            return null;
-        }
-
-        return _activeDungeonRun.Rooms[_activeDungeonRoomIndex];
     }
 
     // Draws talk Screen for the current frame using the active render context.
