@@ -9,6 +9,7 @@ internal static class DungeonCatalog
         "Mystery Grove",
         4,
         7,
+        1,
         [
             new DungeonRoomDefinition(
                 "Abandoned Camp",

@@ -775,6 +775,121 @@ public sealed partial class FarmGame
         return HasMinimumBedRangeCoverage(homePosition, exitBounds);
     }
 
+    // Assigns a teleport-capable Pokemon to the active dungeon portal if its bed range reaches the portal.
+    private void AssignPokemonToActiveDungeonPortal(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.DungeonPortal || _talkState.ActiveBuilding.IsConstructionSite)
+        {
+            return;
+        }
+
+        int portalIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (portalIndex < 0)
+        {
+            return;
+        }
+
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        if (pokemon.GetSkillLevel(SkillType.Teleporting) <= 0)
+        {
+            _talkState.SetText("THIS POKEMON CANT TELEPORT");
+            return;
+        }
+
+        if (pokemon.HomePosition is not Vector2)
+        {
+            _talkState.SetText("THIS POKEMON NEEDS A BED");
+            return;
+        }
+
+        if (!IsBuildingExitWithinPokemonBedRange(pokemon, _placedItems[portalIndex]))
+        {
+            _talkState.SetText("MY BED IS TOO FAR.");
+            return;
+        }
+
+        if (GetWorkerPokemonIds(_placedItems[portalIndex]).Count >= Math.Max(1, _placedItems[portalIndex].Definition.MaxWorkers))
+        {
+            _talkState.SetText("PORTAL ASSIGNMENT FULL");
+            return;
+        }
+
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
+        _placedItems[portalIndex] = AddWorkerToBuilding(_placedItems[portalIndex], pokemon);
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            AssignedConstructionSiteId = null,
+            IsAssignedToWork = false,
+            IsWorking = false,
+            IsFollowingPlayer = false,
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveCooldownRemaining = 0f,
+            MoveTarget = pokemon.Position,
+            ShowWorkBlockedMarker = false
+        };
+
+        _interactTarget = _placedItems[portalIndex];
+        _talkState.UpdateBuildingReference(_placedItems[portalIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[portalIndex]));
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} WILL POWER THE PORTAL");
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} ASSIGNED TO PORTAL";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Unassigns a teleport worker from the active dungeon portal.
+    private void UnassignPokemonFromActiveDungeonPortal(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.DungeonPortal || _talkState.ActiveBuilding.IsConstructionSite)
+        {
+            return;
+        }
+
+        int portalIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (portalIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem portal = _placedItems[portalIndex];
+        if (!HasWorker(portal, pokemonId))
+        {
+            _talkState.SetText("NO WORKER ASSIGNED");
+            return;
+        }
+
+        int workerIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (workerIndex >= 0)
+        {
+            SpawnedPokemon worker = _spawnedDittos[workerIndex];
+            _spawnedDittos[workerIndex] = worker with
+            {
+                IsAssignedToWork = false,
+                IsWorking = false,
+                IsFollowingPlayer = false,
+                IsMoving = false,
+                MoveTimeRemaining = 0f,
+                MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                MoveTarget = worker.Position,
+                ShowWorkBlockedMarker = false
+            };
+        }
+
+        _placedItems[portalIndex] = RemoveWorkerFromBuilding(portal, pokemonId);
+        _interactTarget = _placedItems[portalIndex];
+        _talkState.UpdateBuildingReference(_placedItems[portalIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[portalIndex]));
+        _talkState.SetText("WORKER UNASSIGNED");
+        _interactionMessage = "WORKER UNASSIGNED";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
     // Checks whether at least one tenth of exit-space pixels can be considered inside bed range.
     private static bool HasMinimumBedRangeCoverage(Vector2 homePosition, Rectangle exitBounds)
     {

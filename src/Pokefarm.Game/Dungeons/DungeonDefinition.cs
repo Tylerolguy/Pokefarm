@@ -5,4 +5,5 @@ internal sealed record DungeonDefinition(
     string Name,
     int MinRoomCount,
     int MaxRoomCount,
+    int RequiredTeleportingSkill,
     IReadOnlyList<DungeonRoomDefinition> RoomPool);

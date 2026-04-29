@@ -212,6 +212,33 @@ internal static class BuildingDialogueService
         else if (building.Definition == ItemCatalog.DungeonPortal)
         {
             options.Add(new PokemonDialogueOption("ACCESS DUNGEONS", PokemonDialogueAction.OpenDungeonMenu));
+
+            foreach (SpawnedPokemon pokemon in spawnedPokemon)
+            {
+                if (!pokemon.IsFollowingPlayer || pokemon.GetSkillLevel(SkillType.Teleporting) <= 0)
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"ASSIGN {pokemon.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.AssignDungeonTeleporting,
+                    TargetPokemonId: pokemon.PokemonId));
+            }
+
+            foreach (int workerPokemonId in BuildingWorkerHelpers.GetWorkerPokemonIds(building))
+            {
+                SpawnedPokemon? worker = spawnedPokemon.FirstOrDefault(pokemon => pokemon.PokemonId == workerPokemonId);
+                if (worker is null)
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"UNASSIGN {worker.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.UnassignDungeonTeleporting,
+                    TargetPokemonId: worker.PokemonId));
+            }
         }
         else if (building.Definition.IsResourceProduction)
         {

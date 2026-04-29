@@ -1308,6 +1308,18 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.AssignDungeonTeleporting && selectedOption.TargetPokemonId.HasValue)
+        {
+            AssignPokemonToActiveDungeonPortal(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.UnassignDungeonTeleporting && selectedOption.TargetPokemonId.HasValue)
+        {
+            UnassignPokemonFromActiveDungeonPortal(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.OpenPcLevel)
         {
             OpenPcMenu(PcMenuScreen.Level);
@@ -1982,11 +1994,60 @@ public sealed partial class FarmGame
         }
 
         DungeonDefinition dungeonDefinition = _availableDungeons[_selectedDungeonIndex];
+        int currentTeleportingSkill = GetDungeonPortalTeleportingSkillTotal();
+        int requiredTeleportingSkill = Math.Max(1, dungeonDefinition.RequiredTeleportingSkill);
+        if (currentTeleportingSkill < requiredTeleportingSkill)
+        {
+            _interactionMessage = $"NEED TELEPORTING {requiredTeleportingSkill}";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
         GeneratedDungeon generatedDungeon = DungeonGenerator.Generate(dungeonDefinition);
         _generatedDungeonPreview = generatedDungeon;
         EnterDungeonRun(generatedDungeon);
         _interactionMessage = $"ENTERED {dungeonDefinition.Name.ToUpperInvariant()}";
         _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Sums teleporting skill for Pokemon assigned to the active dungeon portal and in bed range of that portal.
+    private int GetDungeonPortalTeleportingSkillTotal()
+    {
+        PlacedItem? portal = null;
+        if (_activeDungeonPortalIndex >= 0 &&
+            _activeDungeonPortalIndex < _placedItems.Count &&
+            _placedItems[_activeDungeonPortalIndex].Definition == ItemCatalog.DungeonPortal)
+        {
+            portal = _placedItems[_activeDungeonPortalIndex];
+        }
+        else
+        {
+            portal = _placedItems.FirstOrDefault(item => item.Definition == ItemCatalog.DungeonPortal && !item.IsConstructionSite);
+        }
+
+        if (portal is null)
+        {
+            return 0;
+        }
+
+        int total = 0;
+        foreach (int workerPokemonId in GetWorkerPokemonIds(portal))
+        {
+            SpawnedPokemon? worker = _spawnedDittos.FirstOrDefault(pokemon => pokemon.PokemonId == workerPokemonId);
+            if (worker is null || worker.HomePosition is not Vector2)
+            {
+                continue;
+            }
+
+            if (!IsBuildingExitWithinPokemonBedRange(worker, portal))
+            {
+                continue;
+            }
+
+            total += Math.Max(0, worker.GetSkillLevel(SkillType.Teleporting));
+        }
+
+        return total;
     }
 
     // Handles enter Dungeon Run for this gameplay subsystem.

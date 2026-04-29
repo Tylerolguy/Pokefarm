@@ -26,6 +26,8 @@ internal enum PokemonDialogueAction
     OpenChestStorage,
     AssignChestTransport,
     UnassignChestTransport,
+    AssignDungeonTeleporting,
+    UnassignDungeonTeleporting,
     SaveGame,
     OpenDungeonMenu,
     StorePokemonInPc,

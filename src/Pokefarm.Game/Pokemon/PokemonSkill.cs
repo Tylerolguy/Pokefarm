@@ -14,5 +14,6 @@ internal enum SkillType
     Construction = 8,
     Cut = 9,
     RockSmash = 10,
-    Transport = 11
+    Transport = 11,
+    Teleporting = 12
 }
