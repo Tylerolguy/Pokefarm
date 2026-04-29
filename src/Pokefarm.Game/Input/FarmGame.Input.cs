@@ -522,7 +522,9 @@ public sealed partial class FarmGame
             return;
         }
 
-        if (_interactTarget.Definition == ItemCatalog.Chest && !_interactTarget.IsConstructionSite)
+        if (_interactTarget.Definition == ItemCatalog.Chest &&
+            !_interactTarget.IsConstructionSite &&
+            !HasFollowingTransportPokemon())
         {
             OpenChestStorage(_interactTarget);
             return;
@@ -1284,6 +1286,28 @@ public sealed partial class FarmGame
             return;
         }
 
+        if (selectedOption.Action == PokemonDialogueAction.OpenChestStorage)
+        {
+            if (_talkState.ActiveBuilding is not null)
+            {
+                OpenChestStorage(_talkState.ActiveBuilding);
+            }
+
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.AssignChestTransport && selectedOption.TargetPokemonId.HasValue)
+        {
+            AssignPokemonToActiveChestTransport(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
+        if (selectedOption.Action == PokemonDialogueAction.UnassignChestTransport && selectedOption.TargetPokemonId.HasValue)
+        {
+            UnassignPokemonFromActiveChestTransport(selectedOption.TargetPokemonId.Value);
+            return;
+        }
+
         if (selectedOption.Action == PokemonDialogueAction.OpenPcLevel)
         {
             OpenPcMenu(PcMenuScreen.Level);
@@ -1378,6 +1402,12 @@ public sealed partial class FarmGame
 
         ExitTalkMode();
         _activeStorySceneId = null;
+    }
+
+    // Checks whether at least one currently-following Pokemon can perform chest transport work.
+    private bool HasFollowingTransportPokemon()
+    {
+        return _spawnedDittos.Any(pokemon => pokemon.IsFollowingPlayer && pokemon.GetSkillLevel(SkillType.Transport) > 0);
     }
 
     private bool TrySpawnStoryPokemonNearActiveBuilding(string pokemonName)

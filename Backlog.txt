@@ -258,8 +258,39 @@ quests
     compeleted or the giver should store it because pokemon may give similar happiness quests.
 
 
+chests
+- chests are building that is placed
+- when interacted with, they pull up the chest ui and is brown
+- the chest ui displays items stored in the chest and the players inventory
+- in the ui, player should be able to store items to the chest or take items from the chest to the inventory
+- if the players inventory or chest is full, they should not be able to recieve items and a message should shwp
+- different types of chest should be able to hold a different amount of items
 
 
+Saving
+- player should be able to save their game at the pc
+- when loading up the world they should be able to select their save file that they want to play
+    or load in a new game
+- should save as much info as can, inflcuding spawned pokemon, assignments, buildings palce, inventory, chests
+    quests, level and so on
+
+
+
+Start up screen
+- the start up screen should have the option to select a new save file which generates a new file to save 
+    a game to and the player should be allowed to name the file
+- the player should be allowed to select other existing save files by the names of the files
+
+
+
+Ditto skills
+
+
+Story
+
+
+
+_______________________________________________
 
 
 
@@ -279,13 +310,7 @@ dungeons
 
 Pickup mode
 
-chests
-- chests are building that is placed
-- when interacted with, they pull up the chest ui and is brown
-- the chest ui displays items stored in the chest and the players inventory
-- in the ui, player should be able to store items to the chest or take items from the chest to the inventory
-- if the players inventory or chest is full, they should not be able to recieve items and a message should shwp
-- different types of chest should be able to hold a different amount of items
+
 
 
 
@@ -299,23 +324,7 @@ Tranporting
 
 
 
-Ditto skills
 
-
-
-Saving
-- player should be able to save their game at the pc
-- when loading up the world they should be able to select their save file that they want to play
-    or load in a new game
-- should save as much info as can, inflcuding spawned pokemon, assignments, buildings palce, inventory, chests
-    quests, level and so on
-
-
-
-Start up screen
-- the start up screen should have the option to select a new save file which generates a new file to save 
-    a game to and the player should be allowed to name the file
-- the player should be allowed to select other existing save files by the names of the files
 
 
 DEV TOOLS
@@ -327,7 +336,7 @@ tutorial
 
 
 
-Story
+
 
 
 
@@ -347,3 +356,10 @@ ditto can use skills
 
 + Bed show range when talking to
 + update pokemon wander behavoir
++pokemon models
++portals use psychic types
++dev mode features
++update interfaces
++Destroying buildings should drop there items
++Pokedex
++ change buttons

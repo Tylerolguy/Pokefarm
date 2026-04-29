@@ -505,6 +505,104 @@ public sealed partial class FarmGame
         _interactionMessageTimer = InteractionMessageDuration;
     }
 
+    // Assigns a transport-capable Pokemon to the active chest so it can haul nearby drops and produced goods.
+    private void AssignPokemonToActiveChestTransport(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Chest || _talkState.ActiveBuilding.IsConstructionSite)
+        {
+            return;
+        }
+
+        int chestIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (chestIndex < 0)
+        {
+            return;
+        }
+
+        int pokemonIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (pokemonIndex < 0)
+        {
+            return;
+        }
+
+        SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
+        if (pokemon.GetSkillLevel(SkillType.Transport) <= 0)
+        {
+            _talkState.SetText("THIS POKEMON CANT TRANSPORT");
+            return;
+        }
+
+        ClearExistingWorkBuildingForPokemon(pokemon.PokemonId);
+        _placedItems[chestIndex] = AddWorkerToBuilding(_placedItems[chestIndex], pokemon);
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            AssignedConstructionSiteId = null,
+            IsAssignedToWork = true,
+            IsWorking = false,
+            IsFollowingPlayer = false,
+            IsMoving = false,
+            MoveTimeRemaining = 0f,
+            MoveCooldownRemaining = 0f,
+            MoveTarget = pokemon.Position,
+            ShowWorkBlockedMarker = false
+        };
+
+        _interactTarget = _placedItems[chestIndex];
+        _talkState.UpdateBuildingReference(_placedItems[chestIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[chestIndex]));
+        _talkState.SetText($"{pokemon.Name.ToUpperInvariant()} WILL TRANSPORT");
+        _interactionMessage = $"{pokemon.Name.ToUpperInvariant()} ASSIGNED TO CHEST";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
+    // Unassigns a transport Pokemon from the active chest and drops any carried items to the ground.
+    private void UnassignPokemonFromActiveChestTransport(int pokemonId)
+    {
+        if (_talkState.ActiveBuilding is null || _talkState.ActiveBuilding.Definition != ItemCatalog.Chest || _talkState.ActiveBuilding.IsConstructionSite)
+        {
+            return;
+        }
+
+        int chestIndex = _placedItems.FindIndex(item => item == _talkState.ActiveBuilding);
+        if (chestIndex < 0)
+        {
+            return;
+        }
+
+        PlacedItem chest = _placedItems[chestIndex];
+        if (!HasWorker(chest, pokemonId))
+        {
+            _talkState.SetText("NO WORKER ASSIGNED");
+            return;
+        }
+
+        int workerIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == pokemonId);
+        if (workerIndex >= 0)
+        {
+            SpawnedPokemon worker = _spawnedDittos[workerIndex];
+            DropTransportCarryItems(worker.PokemonId, worker.Position);
+            _spawnedDittos[workerIndex] = worker with
+            {
+                IsAssignedToWork = false,
+                IsWorking = false,
+                IsFollowingPlayer = false,
+                IsMoving = false,
+                MoveTimeRemaining = 0f,
+                MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
+                MoveTarget = worker.Position,
+                ShowWorkBlockedMarker = false
+            };
+        }
+
+        _placedItems[chestIndex] = RemoveWorkerFromBuilding(chest, pokemonId);
+        _interactTarget = _placedItems[chestIndex];
+        _talkState.UpdateBuildingReference(_placedItems[chestIndex]);
+        _talkState.SetOptions(GetBuildingTalkOptions(_placedItems[chestIndex]));
+        _talkState.SetText("WORKER UNASSIGNED");
+        _interactionMessage = "WORKER UNASSIGNED";
+        _interactionMessageTimer = InteractionMessageDuration;
+    }
+
     // Transfers stored production from the active building into inventory, then clears the building's stored units.
     private void CollectProducedMaterialsFromActiveBuilding()
     {
@@ -569,6 +667,7 @@ public sealed partial class FarmGame
         if (workerIndex >= 0)
         {
             SpawnedPokemon worker = _spawnedDittos[workerIndex];
+            DropTransportCarryItems(worker.PokemonId, worker.Position);
             _spawnedDittos[workerIndex] = worker with
             {
                 AssignedConstructionSiteId = null,

@@ -31,9 +31,9 @@ internal sealed record ItemDefinition(
     int ConstructionRequiredSkillLevel3 = 0,
     int StorageCapacity = 0)
 {
-    public bool IsBuildingLike => Kind == ItemKind.Building || Kind == ItemKind.ResourceProductionBuilding;
+    public bool IsBuildingLike => Kind == ItemKind.Building || Kind == ItemKind.Debris || Kind == ItemKind.ResourceProductionBuilding;
 
-    public bool IsPlaceable => IsBuildingLike || Kind == ItemKind.Snack;
+    public bool IsPlaceable => Kind == ItemKind.Building || Kind == ItemKind.ResourceProductionBuilding || Kind == ItemKind.Snack;
 
     public bool IsResourceProduction => Kind == ItemKind.ResourceProductionBuilding;
 }

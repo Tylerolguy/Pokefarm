@@ -4,6 +4,7 @@ namespace Pokefarm.Game;
 internal enum ItemKind
 {
     Building,
+    Debris,
     ResourceProductionBuilding,
     Material,
     Snack

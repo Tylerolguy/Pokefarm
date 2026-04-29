@@ -13,5 +13,6 @@ internal enum SkillType
     Cooking = 7,
     Construction = 8,
     Cut = 9,
-    RockSmash = 10
+    RockSmash = 10,
+    Transport = 11
 }

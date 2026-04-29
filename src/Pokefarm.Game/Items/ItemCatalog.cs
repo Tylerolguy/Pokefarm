@@ -12,6 +12,8 @@ internal static class ItemCatalog
     public static readonly ItemDefinition Stone = new("Stone", new Color(122, 122, 132), ItemKind.Material, false, new Point(32, 32));
 
     public static readonly ItemDefinition Barn = new("Barn", new Color(162, 92, 71), ItemKind.Building, true, new Point(80, 80), ConstructionEffortRequired: 12f);
+    public static readonly ItemDefinition LogsDebris = new("Logs Debris", new Color(112, 82, 52), ItemKind.Debris, true, new Point(44, 32));
+    public static readonly ItemDefinition BoulderDebris = new("Boulder Debris", new Color(96, 100, 108), ItemKind.Debris, true, new Point(40, 40));
     public static readonly ItemDefinition WorkBench = new("Work Bench", new Color(124, 86, 54), ItemKind.Building, true, new Point(64, 48), true, "WORK BENCH", ExitSize: new Point(32, 32), WorkbenchQueueSlots: 3, WorkbenchStorageCapacity: 5, ConstructionEffortRequired: 10f, ConstructionRequiredSkill2: SkillType.Crafting, ConstructionRequiredSkillLevel2: 1);
     public static readonly ItemDefinition Chest = new("Chest", new Color(155, 109, 68), ItemKind.Building, true, new Point(40, 32), true, "CHEST", ConstructionEffortRequired: 8f, ConstructionRequiredSkill2: SkillType.Crafting, ConstructionRequiredSkillLevel2: 1, StorageCapacity: 8);
     public static readonly ItemDefinition BasicSnack = new("Basic Snack", new Color(214, 186, 112), ItemKind.Snack, true, new Point(15, 15));
@@ -32,6 +34,8 @@ internal static class ItemCatalog
         Wood,
         Stone,
         Barn,
+        LogsDebris,
+        BoulderDebris,
         WorkBench,
         Chest,
         BasicSnack,

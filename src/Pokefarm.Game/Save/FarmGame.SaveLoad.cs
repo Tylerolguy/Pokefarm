@@ -400,6 +400,43 @@ public sealed partial class FarmGame
             chestSize.Y);
         _placedItems.Add(new PlacedItem(chestBounds, ItemCatalog.Chest, 0d, StoredItems: [new InventoryEntry(ItemCatalog.Wood, 10)]));
 
+        Point logsSize = ItemCatalog.LogsDebris.Size;
+        Point boulderSize = ItemCatalog.BoulderDebris.Size;
+        Rectangle[] logDebrisBounds =
+        [
+            new Rectangle(160, 120, logsSize.X, logsSize.Y),
+            new Rectangle(1040, 140, logsSize.X, logsSize.Y),
+            new Rectangle(180, 560, logsSize.X, logsSize.Y),
+            new Rectangle(980, 560, logsSize.X, logsSize.Y)
+        ];
+        Rectangle[] boulderDebrisBounds =
+        [
+            new Rectangle(300, 180, boulderSize.X, boulderSize.Y),
+            new Rectangle(900, 180, boulderSize.X, boulderSize.Y),
+            new Rectangle(320, 500, boulderSize.X, boulderSize.Y),
+            new Rectangle(880, 500, boulderSize.X, boulderSize.Y)
+        ];
+
+        foreach (Rectangle bounds in logDebrisBounds)
+        {
+            int quantity = Random.Shared.Next(1, 4);
+            _placedItems.Add(new PlacedItem(
+                bounds,
+                ItemCatalog.LogsDebris,
+                0d,
+                StoredItems: [new InventoryEntry(ItemCatalog.Wood, quantity)]));
+        }
+
+        foreach (Rectangle bounds in boulderDebrisBounds)
+        {
+            int quantity = Random.Shared.Next(1, 4);
+            _placedItems.Add(new PlacedItem(
+                bounds,
+                ItemCatalog.BoulderDebris,
+                0d,
+                StoredItems: [new InventoryEntry(ItemCatalog.Stone, quantity)]));
+        }
+
         _playerPosition = new Vector2(200f, 200f);
         _playerDirection = Direction.Down;
         _inputMode = InputMode.Gameplay;

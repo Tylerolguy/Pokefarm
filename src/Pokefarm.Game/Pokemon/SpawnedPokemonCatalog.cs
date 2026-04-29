@@ -15,12 +15,12 @@ internal static class SpawnedPokemonCatalog
         ["Sewaddle"] = new SpawnedPokemonDefinition(
             "Sewaddle",
             CreateSkillLevels((SkillType.Lumber, 1), (SkillType.Farming, 1), (SkillType.Water, 1), 
-            (SkillType.Planting, 1), (SkillType.Harvesting, 1), (SkillType.Construction, 1))),
+            (SkillType.Planting, 1), (SkillType.Harvesting, 1), (SkillType.Construction, 1), (SkillType.Transport, 1))),
         ["Azurill"] = new SpawnedPokemonDefinition(
             "Azurill",
             CreateSkillLevels((SkillType.Farming, 1))),
         ["Sunkern"] = new SpawnedPokemonDefinition("Sunkern", CreateSkillLevels((SkillType.Planting, 1))),
-        ["Pidgey"] = new SpawnedPokemonDefinition("Pidgey", NoSkills),
+        ["Pidgey"] = new SpawnedPokemonDefinition("Pidgey", CreateSkillLevels((SkillType.Transport, 1))),
         ["Cleffa"] = new SpawnedPokemonDefinition("Cleffa", NoSkills),
         ["Igglybuff"] = new SpawnedPokemonDefinition("Igglybuff", NoSkills),
         ["Kricketot"] = new SpawnedPokemonDefinition("Kricketot", NoSkills),
@@ -35,7 +35,7 @@ internal static class SpawnedPokemonCatalog
         ["Nincada"] = new SpawnedPokemonDefinition("Nincada", NoSkills),
         ["Elekid"] = new SpawnedPokemonDefinition("Elekid", CreateSkillLevels((SkillType.Crafting, 1), (SkillType.Construction, 1))),
         ["Noibat"] = new SpawnedPokemonDefinition("Noibat", CreateSkillLevels((SkillType.Harvesting, 1))),
-        ["Dratini"] = new SpawnedPokemonDefinition("Dratini", CreateSkillLevels((SkillType.Water, 1)))
+        ["Dratini"] = new SpawnedPokemonDefinition("Dratini", CreateSkillLevels((SkillType.Water, 1), (SkillType.Transport, 2)))
     };
 
     // Computes and returns or Default without mutating persistent game state.

@@ -20,7 +20,8 @@ internal static class BuildingDialogueService
         IReadOnlyList<SpawnedPokemon> spawnedPokemon,
         Func<SpawnedPokemon, PlacedItem, bool> isWorkbenchWithinBedRange,
         Func<PlacedItem, ItemDefinition?> getProducedMaterialForBuilding,
-        Func<PlacedItem, bool> isDittoWorkingAtBuilding)
+        Func<PlacedItem, bool> isDittoWorkingAtBuilding,
+        Func<SpawnedPokemon, bool> canPokemonTransportToChest)
     {
         List<PokemonDialogueOption> options = [];
         if (building.IsConstructionSite)
@@ -150,6 +151,42 @@ internal static class BuildingDialogueService
                     $"UNASSIGN {building.WorkerPokemonName?.ToUpperInvariant() ?? "WORKER"}",
                     PokemonDialogueAction.UnassignWorkbenchWorker,
                     TargetPokemonId: building.WorkerPokemonId.Value));
+            }
+        }
+        else if (building.Definition == ItemCatalog.Chest)
+        {
+            options.Add(new PokemonDialogueOption("OPEN CHEST", PokemonDialogueAction.OpenChestStorage));
+
+            foreach (SpawnedPokemon pokemon in spawnedPokemon)
+            {
+                if (!pokemon.IsFollowingPlayer)
+                {
+                    continue;
+                }
+
+                if (!canPokemonTransportToChest(pokemon))
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"ASSIGN {pokemon.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.AssignChestTransport,
+                    TargetPokemonId: pokemon.PokemonId));
+            }
+
+            foreach (int workerPokemonId in BuildingWorkerHelpers.GetWorkerPokemonIds(building))
+            {
+                SpawnedPokemon? worker = spawnedPokemon.FirstOrDefault(pokemon => pokemon.PokemonId == workerPokemonId);
+                if (worker is null)
+                {
+                    continue;
+                }
+
+                options.Add(new PokemonDialogueOption(
+                    $"UNASSIGN {worker.Name.ToUpperInvariant()}",
+                    PokemonDialogueAction.UnassignChestTransport,
+                    TargetPokemonId: worker.PokemonId));
             }
         }
         else if (building.Definition == ItemCatalog.Pc)

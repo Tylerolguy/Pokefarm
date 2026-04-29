@@ -521,11 +521,23 @@ public sealed partial class FarmGame
                 continue;
             }
 
-            Rectangle iconBounds = new(
-                startX + (index * (iconSize + spacing)),
-                building.Bounds.Bottom - (iconSize / 2),
-                iconSize,
-                iconSize);
+            Rectangle iconBounds;
+            if (building.Definition == ItemCatalog.Chest)
+            {
+                iconBounds = new Rectangle(
+                    building.Bounds.Right - iconSize - 2,
+                    building.Bounds.Bottom - iconSize - 2 - (index * (iconSize + 2)),
+                    iconSize,
+                    iconSize);
+            }
+            else
+            {
+                iconBounds = new Rectangle(
+                    startX + (index * (iconSize + spacing)),
+                    building.Bounds.Bottom - (iconSize / 2),
+                    iconSize,
+                    iconSize);
+            }
 
             _spriteBatch.Draw(_pixel, iconBounds, new Color(30, 20, 14, 220));
             DrawPanelBorder(iconBounds, new Color(181, 138, 95));
