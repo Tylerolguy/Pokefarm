@@ -80,6 +80,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private readonly List<PlacedItem> _placedItems = [];
     private readonly List<DroppedWorldItem> _droppedWorldItems = [];
     private readonly List<SpawnedPokemon> _spawnedDittos = [];
+    private readonly Dictionary<int, List<ItemDefinition>> _transportCarryItemsByPokemonId = [];
     private readonly List<InventoryEntry> _inventoryItems =
     [
         new(ItemCatalog.Bed, 3),
@@ -972,6 +973,15 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
+            int assignedChestIndex = FindAssignedTransportChestIndex(pokemon.PokemonId);
+            if (assignedChestIndex >= 0)
+            {
+                if (TryUpdateTransportWorker(index, pokemon, assignedChestIndex))
+                {
+                    continue;
+                }
+            }
+
             int assignedConstructionSiteIndex = FindAssignedConstructionSiteIndex(pokemon.PokemonId);
             bool hasConstructionJob = assignedConstructionSiteIndex >= 0;
             bool constructionHasWork = hasConstructionJob && HasAvailableConstructionWork(_placedItems[assignedConstructionSiteIndex]);
@@ -1671,6 +1681,30 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 continue;
             }
 
+            int assignedChestIndex = FindAssignedTransportChestIndex(pokemon.PokemonId);
+            if (assignedChestIndex >= 0)
+            {
+                bool hasTransportWork = HasAvailableTransportWorkForPokemon(pokemon, _placedItems[assignedChestIndex]);
+                if (hasTransportWork)
+                {
+                    _spawnedDittos[pokemonIndex] = pokemon with
+                    {
+                        IsAssignedToWork = true
+                    };
+                }
+                else
+                {
+                    _spawnedDittos[pokemonIndex] = pokemon with
+                    {
+                        IsAssignedToWork = false,
+                        IsWorking = false,
+                        ShowWorkBlockedMarker = false
+                    };
+                }
+
+                continue;
+            }
+
             int assignedBuildingIndex = FindAssignedResourceBuildingIndex(pokemon.PokemonId);
             if (assignedBuildingIndex < 0)
             {
@@ -1829,6 +1863,404 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         {
             yield return (definition.ConstructionRequiredSkill3, definition.ConstructionRequiredSkillLevel3);
         }
+    }
+
+    // Searches current state to locate assigned chest transport building index.
+    private int FindAssignedTransportChestIndex(int pokemonId)
+    {
+        for (int buildingIndex = 0; buildingIndex < _placedItems.Count; buildingIndex++)
+        {
+            PlacedItem building = _placedItems[buildingIndex];
+            if (building.Definition != ItemCatalog.Chest || building.IsConstructionSite || !HasWorker(building, pokemonId))
+            {
+                continue;
+            }
+
+            return buildingIndex;
+        }
+
+        return -1;
+    }
+
+    // Checks whether the transport worker currently has valid pickup/deposit work for the assigned chest.
+    private bool HasAvailableTransportWorkForPokemon(SpawnedPokemon pokemon, PlacedItem chest)
+    {
+        if (pokemon.GetSkillLevel(SkillType.Transport) <= 0)
+        {
+            return false;
+        }
+
+        if (_transportCarryItemsByPokemonId.TryGetValue(pokemon.PokemonId, out List<ItemDefinition>? carryItems) &&
+            carryItems.Count > 0)
+        {
+            return true;
+        }
+
+        if (pokemon.HomePosition is not Vector2 homePosition)
+        {
+            return false;
+        }
+
+        int chestCapacity = Math.Max(1, chest.Definition.StorageCapacity);
+        if (GetStoredItems(chest).Count >= chestCapacity)
+        {
+            return false;
+        }
+
+        foreach (DroppedWorldItem droppedItem in _droppedWorldItems)
+        {
+            if (IsPositionWithinPokemonBedRange(homePosition, droppedItem.Bounds.Center))
+            {
+                return true;
+            }
+        }
+
+        foreach (PlacedItem building in _placedItems)
+        {
+            ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
+            if (producedMaterial is null || building.StoredProducedUnits <= 0)
+            {
+                continue;
+            }
+
+            Rectangle pickupBounds = GetResourceBuildingExitBounds(building);
+            if (pickupBounds.IsEmpty)
+            {
+                pickupBounds = building.Bounds;
+            }
+
+            if (IsPositionWithinPokemonBedRange(homePosition, pickupBounds.Center))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Updates one transport worker step: gather items in bed range, then deliver to the assigned chest.
+    private bool TryUpdateTransportWorker(int pokemonIndex, SpawnedPokemon pokemon, int chestIndex)
+    {
+        if (chestIndex < 0 || chestIndex >= _placedItems.Count)
+        {
+            return false;
+        }
+
+        PlacedItem chest = _placedItems[chestIndex];
+        if (chest.Definition != ItemCatalog.Chest || chest.IsConstructionSite)
+        {
+            return false;
+        }
+
+        if (pokemon.HomePosition is not Vector2 homePosition)
+        {
+            _spawnedDittos[pokemonIndex] = pokemon with
+            {
+                IsAssignedToWork = false,
+                IsWorking = false,
+                ShowWorkBlockedMarker = false
+            };
+            return true;
+        }
+
+        List<ItemDefinition> carryItems = GetOrCreateTransportCarryItems(pokemon.PokemonId);
+        int transportCapacity = Math.Max(1, pokemon.GetSkillLevel(SkillType.Transport));
+        bool shouldDeposit = carryItems.Count >= transportCapacity;
+        if (!shouldDeposit)
+        {
+            shouldDeposit = !TryFindNearestTransportPickupTarget(homePosition, pokemon.Position, out _, out _, out _);
+        }
+
+        if (!shouldDeposit)
+        {
+            if (!TryHandleTransportPickup(pokemonIndex, pokemon, homePosition, carryItems))
+            {
+                _spawnedDittos[pokemonIndex] = pokemon with
+                {
+                    MoveCooldownRemaining = WanderRetryDelaySeconds,
+                    ShowWorkBlockedMarker = true
+                };
+            }
+
+            return true;
+        }
+
+        if (carryItems.Count <= 0)
+        {
+            _spawnedDittos[pokemonIndex] = pokemon with
+            {
+                IsAssignedToWork = false,
+                IsWorking = false,
+                ShowWorkBlockedMarker = false
+            };
+            return false;
+        }
+
+        Rectangle chestTarget = GetResourceBuildingExitBounds(chest);
+        if (chestTarget.IsEmpty)
+        {
+            chestTarget = new Rectangle(
+                chest.Bounds.X,
+                chest.Bounds.Bottom + 2,
+                chest.Bounds.Width,
+                PlayerSize);
+        }
+        Rectangle pokemonBounds = new((int)pokemon.Position.X, (int)pokemon.Position.Y, PlayerSize, PlayerSize);
+        if (pokemonBounds.Intersects(chestTarget))
+        {
+            List<InventoryEntry> storedItems = GetStoredItems(chest);
+            int chestCapacity = Math.Max(1, chest.Definition.StorageCapacity);
+            while (carryItems.Count > 0 && (storedItems.Any(entry => entry.Definition == carryItems[0]) || storedItems.Count < chestCapacity))
+            {
+                storedItems = AddStoredItemUnit(storedItems, carryItems[0]);
+                carryItems.RemoveAt(0);
+            }
+
+            _placedItems[chestIndex] = chest with { StoredItems = storedItems };
+            _spawnedDittos[pokemonIndex] = pokemon with
+            {
+                IsAssignedToWork = carryItems.Count > 0 || HasAvailableTransportWorkForPokemon(pokemon, _placedItems[chestIndex]),
+                IsWorking = false,
+                IsMoving = false,
+                MoveTimeRemaining = 0f,
+                MoveCooldownRemaining = 0f,
+                MoveTarget = pokemon.Position,
+                ShowWorkBlockedMarker = false
+            };
+            return true;
+        }
+
+        if (TryFindPathDirectionToTargetArea(
+            pokemon.Position,
+            chestTarget,
+            pokemonIndex,
+            out Direction chestDirection,
+            ignoreDynamicActorCollisions: true))
+        {
+            Vector2 movement = DirectionToMovement(chestDirection);
+            Vector2 candidatePosition = pokemon.Position + (movement * SpawnedPokemonMoveDistance);
+            _spawnedDittos[pokemonIndex] = pokemon with
+            {
+                Direction = chestDirection,
+                IsMoving = true,
+                IsWorking = false,
+                MoveTarget = candidatePosition,
+                MoveTimeRemaining = SpawnedPokemonMoveDuration,
+                MoveCooldownRemaining = 0f,
+                ShowWorkBlockedMarker = false
+            };
+            return true;
+        }
+
+        _spawnedDittos[pokemonIndex] = pokemon with
+        {
+            MoveCooldownRemaining = WanderRetryDelaySeconds,
+            ShowWorkBlockedMarker = true
+        };
+        return true;
+    }
+
+    // Handles pickup logic for transport workers from dropped items and resource outputs.
+    private bool TryHandleTransportPickup(int pokemonIndex, SpawnedPokemon pokemon, Vector2 homePosition, List<ItemDefinition> carryItems)
+    {
+        if (!TryFindNearestTransportPickupTarget(homePosition, pokemon.Position, out bool isDroppedItem, out int targetIndex, out Rectangle targetArea))
+        {
+            return false;
+        }
+
+        Rectangle pokemonBounds = new((int)pokemon.Position.X, (int)pokemon.Position.Y, PlayerSize, PlayerSize);
+        if (pokemonBounds.Intersects(targetArea))
+        {
+            if (isDroppedItem)
+            {
+                if (targetIndex < 0 || targetIndex >= _droppedWorldItems.Count)
+                {
+                    return false;
+                }
+
+                carryItems.Add(_droppedWorldItems[targetIndex].Definition);
+                _droppedWorldItems.RemoveAt(targetIndex);
+                _spawnedDittos[pokemonIndex] = pokemon with
+                {
+                    IsMoving = false,
+                    IsWorking = false,
+                    MoveTimeRemaining = 0f,
+                    MoveCooldownRemaining = 0f,
+                    MoveTarget = pokemon.Position,
+                    ShowWorkBlockedMarker = false
+                };
+                return true;
+            }
+
+            if (targetIndex < 0 || targetIndex >= _placedItems.Count)
+            {
+                return false;
+            }
+
+            PlacedItem building = _placedItems[targetIndex];
+            ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
+            if (producedMaterial is null || building.StoredProducedUnits <= 0)
+            {
+                return false;
+            }
+
+            carryItems.Add(producedMaterial);
+            _placedItems[targetIndex] = building with { StoredProducedUnits = Math.Max(0, building.StoredProducedUnits - 1) };
+            _spawnedDittos[pokemonIndex] = pokemon with
+            {
+                IsMoving = false,
+                IsWorking = false,
+                MoveTimeRemaining = 0f,
+                MoveCooldownRemaining = 0f,
+                MoveTarget = pokemon.Position,
+                ShowWorkBlockedMarker = false
+            };
+            return true;
+        }
+
+        if (TryFindPathDirectionToTargetArea(
+            pokemon.Position,
+            targetArea,
+            pokemonIndex,
+            out Direction pickupDirection,
+            ignoreDynamicActorCollisions: true))
+        {
+            Vector2 movement = DirectionToMovement(pickupDirection);
+            Vector2 candidatePosition = pokemon.Position + (movement * SpawnedPokemonMoveDistance);
+            _spawnedDittos[pokemonIndex] = pokemon with
+            {
+                Direction = pickupDirection,
+                IsMoving = true,
+                IsWorking = false,
+                MoveTarget = candidatePosition,
+                MoveTimeRemaining = SpawnedPokemonMoveDuration,
+                MoveCooldownRemaining = 0f,
+                ShowWorkBlockedMarker = false
+            };
+            return true;
+        }
+
+        return false;
+    }
+
+    // Finds the nearest pickup target (dropped item or building output) inside the pokemon's bed range.
+    private bool TryFindNearestTransportPickupTarget(
+        Vector2 homePosition,
+        Vector2 pokemonPosition,
+        out bool isDroppedItem,
+        out int targetIndex,
+        out Rectangle targetArea)
+    {
+        isDroppedItem = false;
+        targetIndex = -1;
+        targetArea = Rectangle.Empty;
+        float bestDistance = float.MaxValue;
+
+        for (int index = 0; index < _droppedWorldItems.Count; index++)
+        {
+            DroppedWorldItem droppedItem = _droppedWorldItems[index];
+            if (!IsPositionWithinPokemonBedRange(homePosition, droppedItem.Bounds.Center))
+            {
+                continue;
+            }
+
+            float distance = Vector2.DistanceSquared(pokemonPosition, new Vector2(droppedItem.Bounds.Center.X, droppedItem.Bounds.Center.Y));
+            if (distance >= bestDistance)
+            {
+                continue;
+            }
+
+            bestDistance = distance;
+            isDroppedItem = true;
+            targetIndex = index;
+            targetArea = droppedItem.Bounds;
+        }
+
+        for (int buildingIndex = 0; buildingIndex < _placedItems.Count; buildingIndex++)
+        {
+            PlacedItem building = _placedItems[buildingIndex];
+            ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(building);
+            if (producedMaterial is null || building.StoredProducedUnits <= 0)
+            {
+                continue;
+            }
+
+            Rectangle pickupBounds = GetResourceBuildingExitBounds(building);
+            if (pickupBounds.IsEmpty)
+            {
+                pickupBounds = building.Bounds;
+            }
+
+            if (!IsPositionWithinPokemonBedRange(homePosition, pickupBounds.Center))
+            {
+                continue;
+            }
+
+            float distance = Vector2.DistanceSquared(pokemonPosition, new Vector2(pickupBounds.Center.X, pickupBounds.Center.Y));
+            if (distance >= bestDistance)
+            {
+                continue;
+            }
+
+            bestDistance = distance;
+            isDroppedItem = false;
+            targetIndex = buildingIndex;
+            targetArea = pickupBounds;
+        }
+
+        return targetIndex >= 0 && !targetArea.IsEmpty;
+    }
+
+    // Returns true when the provided point lies within this pokemon's home-bed radius.
+    private static bool IsPositionWithinPokemonBedRange(Vector2 homePosition, Point worldPoint)
+    {
+        Vector2 pointTopLeft = new(worldPoint.X - (PlayerSize / 2f), worldPoint.Y - (PlayerSize / 2f));
+        return Vector2.DistanceSquared(homePosition, pointTopLeft) <= HomeWanderRadius * HomeWanderRadius;
+    }
+
+    // Gets existing transport carry list for a pokemon or creates an empty one for ongoing job state.
+    private List<ItemDefinition> GetOrCreateTransportCarryItems(int pokemonId)
+    {
+        if (_transportCarryItemsByPokemonId.TryGetValue(pokemonId, out List<ItemDefinition>? items))
+        {
+            return items;
+        }
+
+        List<ItemDefinition> created = [];
+        _transportCarryItemsByPokemonId[pokemonId] = created;
+        return created;
+    }
+
+    // Adds one unit to building storage list, stacking when definition already exists.
+    private static List<InventoryEntry> AddStoredItemUnit(List<InventoryEntry> storedItems, ItemDefinition definition)
+    {
+        int existingIndex = storedItems.FindIndex(entry => entry.Definition == definition);
+        if (existingIndex >= 0)
+        {
+            InventoryEntry existing = storedItems[existingIndex];
+            storedItems[existingIndex] = existing with { Quantity = existing.Quantity + 1 };
+            return storedItems;
+        }
+
+        storedItems.Add(new InventoryEntry(definition, 1));
+        return storedItems;
+    }
+
+    // Drops all carried transport items to the world and clears the carry state for that worker.
+    private void DropTransportCarryItems(int pokemonId, Vector2 originPosition)
+    {
+        if (!_transportCarryItemsByPokemonId.TryGetValue(pokemonId, out List<ItemDefinition>? carryItems) || carryItems.Count <= 0)
+        {
+            return;
+        }
+
+        Vector2 dropOrigin = new(originPosition.X + (PlayerSize / 2f), originPosition.Y + (PlayerSize / 2f));
+        foreach (ItemDefinition carriedItem in carryItems)
+        {
+            DropWorldItemQuantity(dropOrigin, carriedItem, 1);
+        }
+
+        _transportCarryItemsByPokemonId.Remove(pokemonId);
     }
 
     // Checks whether available Production Work is currently true for the active world state.
@@ -2584,7 +3016,14 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             _spawnedDittos,
             IsWorkbenchWithinPokemonBedRange,
             GetProducedMaterialForBuilding,
-            IsDittoWorkingAtBuilding);
+            IsDittoWorkingAtBuilding,
+            CanPokemonTransportToChest);
+    }
+
+    // Checks whether this pokemon can be assigned to chest transport duties.
+    private static bool CanPokemonTransportToChest(SpawnedPokemon pokemon)
+    {
+        return pokemon.GetSkillLevel(SkillType.Transport) > 0;
     }
 
     // Checks whether Ditto is currently working at the supplied building.
