@@ -130,10 +130,8 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private int _inventoryCapacity = InventoryColumns * InventoryRows;
     private Vector2 _previewOffset = new(PlayerSize + 24f, 0f);
     private PlacedItem? _previewItem;
-    private PlacedItem? _removeTarget;
     private PlacedItem? _interactTarget;
     private int _talkTargetIndex = -1;
-    private Rectangle _removeSelectorBounds;
     private InputMode _inputMode;
     private Direction _playerDirection = Direction.Down;
     private float _walkAnimationTimer;
@@ -375,7 +373,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         bool inventoryPressed = keyboard.IsKeyDown(Keys.I) && !_previousKeyboard.IsKeyDown(Keys.I);
         bool confirmPressed = keyboard.IsKeyDown(Keys.Space) && !_previousKeyboard.IsKeyDown(Keys.Space);
         bool devPlacePressed = keyboard.IsKeyDown(Keys.Enter) && !_previousKeyboard.IsKeyDown(Keys.Enter);
-        bool removeModePressed = keyboard.IsKeyDown(Keys.U) && !_previousKeyboard.IsKeyDown(Keys.U);
         bool interactPressed = keyboard.IsKeyDown(Keys.E) && !_previousKeyboard.IsKeyDown(Keys.E);
         bool cycleSkillPressed = keyboard.IsKeyDown(Keys.C) && !_previousKeyboard.IsKeyDown(Keys.C);
         bool talkPressed = keyboard.IsKeyDown(Keys.Q) && !_previousKeyboard.IsKeyDown(Keys.Q);
@@ -417,10 +414,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             {
                 ExitPlacementMode(InputMode.Inventory);
             }
-            else if (_inputMode == InputMode.Removal)
-            {
-                ExitRemovalMode(InputMode.Gameplay);
-            }
             else if (_inputMode == InputMode.Inventory)
             {
                 _inputMode = InputMode.Gameplay;
@@ -461,26 +454,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             {
                 ExitPlacementMode(InputMode.Inventory);
             }
-            else if (_inputMode == InputMode.Removal)
-            {
-                _inputMode = InputMode.Inventory;
-                _removeTarget = null;
-            }
             else
             {
                 ToggleInventoryMode();
-            }
-        }
-
-        if (removeModePressed)
-        {
-            if (_inputMode == InputMode.Removal)
-            {
-                ExitRemovalMode(InputMode.Gameplay);
-            }
-            else if (_inputMode == InputMode.Gameplay)
-            {
-                BeginRemovalMode();
             }
         }
 
@@ -500,15 +476,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             if (confirmPressed || devPlacePressed)
             {
                 TryPlaceSelectedItem(skipConstructionSite: devPlacePressed);
-            }
-        }
-        else if (_inputMode == InputMode.Removal)
-        {
-            UpdateRemovalPreview(keyboard, gameTime, moveLeftPressed, moveRightPressed, moveUpPressed, moveDownPressed);
-
-            if (confirmPressed)
-            {
-                TryPickUpSelectedItem();
             }
         }
         else if (_inputMode == InputMode.Crafting)
@@ -695,7 +662,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             DrawPlacedItems();
             DrawSpawnedDittos();
             DrawPlacementPreview();
-            DrawRemovalPreview();
         }
 
         DrawPlayer();
@@ -858,10 +824,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
 
             _placedItems.RemoveAt(index);
 
-            if (_removeTarget == item)
-            {
-                _removeTarget = null;
-            }
         }
     }
 
@@ -2964,29 +2926,6 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
 
         return current + MathF.Sign(target - current) * maxDelta;
-    }
-
-    // Computes and returns removal Selector Size without mutating persistent game state.
-    private Point GetRemovalSelectorSize()
-    {
-        if (_removeTarget is not null)
-        {
-            return _removeTarget.Definition.Size;
-        }
-
-        int maxSize = 0;
-        foreach (InventoryEntry entry in _inventoryItems)
-        {
-            if (!entry.Definition.IsPlaceable)
-            {
-                continue;
-            }
-
-            maxSize = Math.Max(maxSize, Math.Max(entry.Definition.Size.X, entry.Definition.Size.Y));
-        }
-
-        maxSize = Math.Max(maxSize, 48);
-        return new Point(maxSize, maxSize);
     }
 
     // Checks whether an item can be added without exceeding the current inventory capacity.

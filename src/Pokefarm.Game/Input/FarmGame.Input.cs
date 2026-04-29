@@ -88,7 +88,6 @@ public sealed partial class FarmGame
         }
 
         ExitPlacementMode(InputMode.Gameplay);
-        ExitRemovalMode(InputMode.Gameplay);
         _inputMode = InputMode.Inventory;
         EnsureInventorySelectionVisible();
     }
@@ -117,26 +116,6 @@ public sealed partial class FarmGame
         _inputMode = nextMode;
         _previewItem = null;
         _previewPlacementValid = false;
-    }
-
-    // Enters removal Mode flow and initializes transient interaction state.
-    private void BeginRemovalMode()
-    {
-        _inputMode = InputMode.Removal;
-        _previewOffset = new Vector2(PlayerSize + 24f, 0f);
-        UpdateRemovalPreview(Keyboard.GetState(), new GameTime(), false, false, false, false);
-    }
-
-    // Leaves removal Mode flow and restores default interaction state.
-    private void ExitRemovalMode(InputMode nextMode)
-    {
-        if (_inputMode == InputMode.Removal)
-        {
-            _inputMode = nextMode;
-        }
-
-        _removeTarget = null;
-        _removeSelectorBounds = Rectangle.Empty;
     }
 
     // Ticks placement Preview each frame and keeps related timers and state synchronized.
@@ -203,70 +182,6 @@ public sealed partial class FarmGame
 
         _previewItem = previewItem;
         _previewPlacementValid = CanPlaceItem(previewItem);
-    }
-
-    // Ticks removal Preview each frame and keeps related timers and state synchronized.
-    private void UpdateRemovalPreview(
-        KeyboardState keyboard,
-        GameTime gameTime,
-        bool moveLeftPressed,
-        bool moveRightPressed,
-        bool moveUpPressed,
-        bool moveDownPressed)
-    {
-        float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-        Vector2 previewMovement = Vector2.Zero;
-
-        if (keyboard.IsKeyDown(Keys.A) && !moveLeftPressed)
-        {
-            previewMovement.X -= 1f;
-        }
-
-        if (keyboard.IsKeyDown(Keys.D) && !moveRightPressed)
-        {
-            previewMovement.X += 1f;
-        }
-
-        if (keyboard.IsKeyDown(Keys.W) && !moveUpPressed)
-        {
-            previewMovement.Y -= 1f;
-        }
-
-        if (keyboard.IsKeyDown(Keys.S) && !moveDownPressed)
-        {
-            previewMovement.Y += 1f;
-        }
-
-        if (previewMovement != Vector2.Zero)
-        {
-            previewMovement.Normalize();
-            _previewOffset += previewMovement * PreviewMoveSpeed * deltaTime;
-        }
-
-        if (_previewOffset != Vector2.Zero && _previewOffset.LengthSquared() > PreviewMaxDistance * PreviewMaxDistance)
-        {
-            _previewOffset.Normalize();
-            _previewOffset *= PreviewMaxDistance;
-        }
-
-        Vector2 playerCenter = _playerPosition + new Vector2(PlayerSize / 2f, PlayerSize / 2f);
-        Vector2 previewCenter = playerCenter + _previewOffset;
-        Point selectorSize = GetRemovalSelectorSize();
-        _removeSelectorBounds = new Rectangle(
-            (int)(previewCenter.X - (selectorSize.X / 2f)),
-            (int)(previewCenter.Y - (selectorSize.Y / 2f)),
-            selectorSize.X,
-            selectorSize.Y);
-
-        _removeTarget = null;
-        foreach (PlacedItem item in _placedItems)
-        {
-            if (item.Bounds.Intersects(_removeSelectorBounds))
-            {
-                _removeTarget = item;
-                break;
-            }
-        }
     }
 
     // Ticks gameplay Movement each frame and keeps related timers and state synchronized.
@@ -476,124 +391,6 @@ public sealed partial class FarmGame
         }
 
         return true;
-    }
-
-    // Attempts to pick Up Selected Item and reports success so callers can handle failure without exceptions.
-    private void TryPickUpSelectedItem()
-    {
-        if (_inputMode != InputMode.Removal || _removeTarget is null)
-        {
-            return;
-        }
-
-        ItemDefinition? producedMaterial = GetProducedMaterialForBuilding(_removeTarget);
-        if (_removeTarget.Definition.IsResourceProduction &&
-            producedMaterial is not null &&
-            _removeTarget.StoredProducedUnits > 0 &&
-            !CanAddInventoryItem(producedMaterial))
-        {
-            _interactionMessage = "INVENTORY FULL";
-            _interactionMessageTimer = InteractionMessageDuration;
-            return;
-        }
-
-        if (!CanAddInventoryItem(_removeTarget.Definition))
-        {
-            _interactionMessage = "INVENTORY FULL";
-            _interactionMessageTimer = InteractionMessageDuration;
-            return;
-        }
-
-        List<InventoryEntry> storedItems = GetStoredItems(_removeTarget);
-        if (storedItems.Count > 0)
-        {
-            List<ItemDefinition> projectedDefinitions = storedItems.Select(entry => entry.Definition).ToList();
-            projectedDefinitions.Add(_removeTarget.Definition);
-            if (_removeTarget.Definition.IsResourceProduction &&
-                producedMaterial is not null &&
-                _removeTarget.StoredProducedUnits > 0)
-            {
-                projectedDefinitions.Add(producedMaterial);
-            }
-
-            if (!CanAddInventoryItems(projectedDefinitions))
-            {
-                _interactionMessage = "INVENTORY FULL";
-                _interactionMessageTimer = InteractionMessageDuration;
-                return;
-            }
-        }
-
-        if (_removeTarget.Definition == ItemCatalog.Bed)
-        {
-            foreach (int residentPokemonId in GetBedResidentPokemonIds(_removeTarget))
-            {
-                UnclaimPokemon(residentPokemonId);
-            }
-        }
-
-        foreach (int workerPokemonId in GetWorkerPokemonIds(_removeTarget))
-        {
-            int workerIndex = _spawnedDittos.FindIndex(pokemon => pokemon.PokemonId == workerPokemonId);
-            if (workerIndex >= 0)
-            {
-                SpawnedPokemon worker = _spawnedDittos[workerIndex];
-                Vector2 respawnPosition = GetWorkerRespawnPosition(_removeTarget);
-                _spawnedDittos[workerIndex] = worker with
-                {
-                    IsAssignedToWork = false,
-                    IsWorking = false,
-                    IsFollowingPlayer = false,
-                    IsMoving = false,
-                    MoveTimeRemaining = 0f,
-                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
-                    MoveTarget = respawnPosition,
-                    Position = respawnPosition
-                };
-            }
-        }
-
-        if (_removeTarget.IsConstructionSite && _removeTarget.ConstructionSiteId.HasValue)
-        {
-            int constructionSiteId = _removeTarget.ConstructionSiteId.Value;
-            for (int pokemonIndex = 0; pokemonIndex < _spawnedDittos.Count; pokemonIndex++)
-            {
-                SpawnedPokemon pokemon = _spawnedDittos[pokemonIndex];
-                if (pokemon.AssignedConstructionSiteId != constructionSiteId)
-                {
-                    continue;
-                }
-
-                _spawnedDittos[pokemonIndex] = pokemon with
-                {
-                    AssignedConstructionSiteId = null,
-                    IsAssignedToWork = false,
-                    IsWorking = false,
-                    IsFollowingPlayer = false,
-                    IsMoving = false,
-                    MoveTimeRemaining = 0f,
-                    MoveCooldownRemaining = GetRandomMoveDelaySeconds(),
-                    MoveTarget = pokemon.Position
-                };
-            }
-        }
-
-        if (_removeTarget.Definition.IsResourceProduction &&
-            producedMaterial is not null &&
-            _removeTarget.StoredProducedUnits > 0)
-        {
-            AddInventoryItem(producedMaterial, _removeTarget.StoredProducedUnits);
-        }
-
-        foreach (InventoryEntry storedEntry in storedItems)
-        {
-            AddInventoryItem(storedEntry.Definition, storedEntry.Quantity);
-        }
-
-        _placedItems.Remove(_removeTarget);
-        AddInventoryItem(_removeTarget.Definition, 1);
-        _removeTarget = null;
-        UpdateRemovalPreview(Keyboard.GetState(), new GameTime(), false, false, false, false);
     }
 
     // Attempts to interact With Building and reports success so callers can handle failure without exceptions.

@@ -621,30 +621,6 @@ public sealed partial class FarmGame
         DrawPixelText("!", new Vector2(panel.X + 5, panel.Y + 3), UnclaimedMarkerText);
     }
 
-    // Draws removal Preview for the current frame using the active render context.
-    private void DrawRemovalPreview()
-    {
-        if (_spriteBatch is null || _pixel is null || _inputMode != InputMode.Removal)
-        {
-            return;
-        }
-
-        _spriteBatch.Draw(_pixel, _removeSelectorBounds, new Color(255, 255, 255, 45));
-        DrawPanelBorder(_removeSelectorBounds, new Color(255, 245, 180));
-
-        if (_removeTarget is null)
-        {
-            return;
-        }
-
-        Color tint = new(255, 215, 90, 140);
-        Texture2D texture = (_removeTarget.Definition.IsBuildingLike || _removeTarget.Definition.Kind == ItemKind.Snack) && _removeTarget.Definition.HasCollision
-            ? _pixel
-            : _circleTexture ?? _pixel;
-        _spriteBatch.Draw(texture, _removeTarget.Bounds, tint);
-        DrawPanelBorder(_removeTarget.Bounds, Color.Gold);
-    }
-
     // Draws inventory Screen for the current frame using the active render context.
     private void DrawInventoryScreen()
     {
