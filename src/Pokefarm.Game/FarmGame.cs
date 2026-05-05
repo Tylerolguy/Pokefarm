@@ -75,12 +75,31 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private const string StartupMusicFileName = "09 Celadon City's Theme.mp3";
     private static readonly Color UnclaimedMarkerBackground = new(30, 20, 14, 230);
     private static readonly Color UnclaimedMarkerText = new(236, 220, 196);
+    private const float CutMoveCooldownSeconds = 0.45f;
+    private const float CutAnimationDurationSeconds = 0.16f;
+    private const int CutPower = 50;
+    private const float BubbleMoveCooldownSeconds = 0.3f;
+    private const int BubblePower = 40;
+    private const float BubbleSpeed = 340f;
+    private const int BubbleRadius = 6;
+    private const int CutPpCost = 2;
+    private const int BubblePpCost = 3;
+    private const int DungeonDittoMaxPp = 30;
+    private const int MaxDungeonFollowersAtStart = 1;
+    private const float DungeonSwapLockSeconds = 0.5f;
 
     private readonly GraphicsDeviceManager _graphics;
     private readonly Rectangle _worldBounds = new(0, 0, WorldWidth, WorldHeight);
     private readonly List<PlacedItem> _placedItems = [];
     private readonly List<DroppedWorldItem> _droppedWorldItems = [];
     private readonly List<SpawnedPokemon> _spawnedDittos = [];
+    private readonly List<SpawnedPokemon> _dungeonPokemon = [];
+    private readonly List<DungeonMoveAnimation> _activeDungeonMoveAnimations = [];
+    private readonly List<DungeonProjectile> _activeDungeonProjectiles = [];
+    private readonly List<string> _dungeonPartyPokemonNames = [];
+    private readonly List<int> _dungeonPartyCurrentPp = [];
+    private readonly List<int> _dungeonPartyMaxPp = [];
+    private readonly List<DungeonDelayedAreaAttack> _activeDungeonDelayedAreaAttacks = [];
     private readonly Dictionary<int, List<ItemDefinition>> _transportCarryItemsByPokemonId = [];
     private readonly List<InventoryEntry> _inventoryItems =
     [
@@ -112,6 +131,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         DungeonCatalog.MysteryGrove
     ];
     private readonly List<string> _storedPcPokemonNames = [];
+    private readonly record struct DungeonMoveAnimation(Rectangle Bounds, float TimeRemaining, float TotalDuration, string MoveName);
+    private readonly record struct DungeonProjectile(Vector2 Position, Vector2 Direction, float Speed, int Damage, int Radius, string MoveName);
+    private readonly record struct DungeonDelayedAreaAttack(Vector2 Center, float Radius, float DelayRemaining, int Damage, string MoveName, string AttackerName);
+    private readonly record struct DungeonMoveDefinition(string Name, Keys Hotkey, int PpCost);
     private SpriteBatch? _spriteBatch;
     private Texture2D? _pixel;
     private Texture2D? _circleTexture;
@@ -177,6 +200,24 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private float _dayNightCycleTimerSeconds;
     private float _dialogueTransition;
     private float _talkExitTimer;
+    private float _dungeonMoveCooldownRemaining;
+    private float _dungeonProjectileCooldownRemaining;
+    private float _dungeonSwapLockRemaining;
+    private int _activeDungeonPartyIndex;
+    private int _dungeonDittoCurrentHp = 1;
+    private int _dungeonDittoMaxHp = 1;
+    private int _dungeonDittoCurrentPp = DungeonDittoMaxPp;
+
+    private static readonly IReadOnlyList<DungeonMoveDefinition> DittoDungeonMoves =
+    [
+        new DungeonMoveDefinition("CUT", Keys.Q, CutPpCost),
+        new DungeonMoveDefinition("BUBBLE", Keys.W, BubblePpCost)
+    ];
+
+    private static readonly IReadOnlyList<DungeonMoveDefinition> RotomDungeonMoves =
+    [
+        new DungeonMoveDefinition("DISCHARGE", Keys.Q, 5)
+    ];
     private string? _interactionMessage;
     private SkillType _activeDittoSkill = SkillType.None;
     private PlacedItem? _activeSkillDamageTarget;
@@ -376,12 +417,18 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             }
         }
         _playerMovement = Vector2.Zero;
+        _dungeonMoveCooldownRemaining = Math.Max(0f, _dungeonMoveCooldownRemaining - deltaTime);
+        _dungeonProjectileCooldownRemaining = Math.Max(0f, _dungeonProjectileCooldownRemaining - deltaTime);
+        _dungeonSwapLockRemaining = Math.Max(0f, _dungeonSwapLockRemaining - deltaTime);
         bool inventoryPressed = keyboard.IsKeyDown(Keys.I) && !_previousKeyboard.IsKeyDown(Keys.I);
         bool confirmPressed = keyboard.IsKeyDown(Keys.Space) && !_previousKeyboard.IsKeyDown(Keys.Space);
         bool devPlacePressed = keyboard.IsKeyDown(Keys.Enter) && !_previousKeyboard.IsKeyDown(Keys.Enter);
         bool interactPressed = keyboard.IsKeyDown(Keys.E) && !_previousKeyboard.IsKeyDown(Keys.E);
         bool cycleSkillPressed = keyboard.IsKeyDown(Keys.C) && !_previousKeyboard.IsKeyDown(Keys.C);
         bool talkPressed = keyboard.IsKeyDown(Keys.Q) && !_previousKeyboard.IsKeyDown(Keys.Q);
+        bool bubblePressed = keyboard.IsKeyDown(Keys.W) && !_previousKeyboard.IsKeyDown(Keys.W);
+        bool nextPartyPressed = keyboard.IsKeyDown(Keys.F) && !_previousKeyboard.IsKeyDown(Keys.F);
+        bool previousPartyPressed = keyboard.IsKeyDown(Keys.D) && !_previousKeyboard.IsKeyDown(Keys.D);
         bool hitboxModePressed = keyboard.IsKeyDown(Keys.H) && !_previousKeyboard.IsKeyDown(Keys.H);
         bool moveLeftPressed = keyboard.IsKeyDown(Keys.Left) && !_previousKeyboard.IsKeyDown(Keys.Left);
         bool moveRightPressed = keyboard.IsKeyDown(Keys.Right) && !_previousKeyboard.IsKeyDown(Keys.Right);
@@ -587,7 +634,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         }
         else
         {
-            UpdateGameplayMovement(keyboard, gameTime);
+            if (!(_activeDungeonRun is not null && _dungeonSwapLockRemaining > 0f))
+            {
+                UpdateGameplayMovement(keyboard, gameTime);
+            }
 
             if (interactPressed)
             {
@@ -612,9 +662,39 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 }
             }
 
-            if (talkPressed && _activeDungeonRun is null)
+            if (talkPressed)
             {
-                TryTalkWithPokemon();
+                if (_activeDungeonRun is null)
+                {
+                    TryTalkWithPokemon();
+                }
+                else if (_dungeonMoveCooldownRemaining <= 0f)
+                {
+                    if (TryUseActiveDungeonMoveForKey(Keys.Q))
+                    {
+                        _dungeonMoveCooldownRemaining = CutMoveCooldownSeconds;
+                    }
+                }
+            }
+
+            if (bubblePressed && _activeDungeonRun is not null && _dungeonProjectileCooldownRemaining <= 0f)
+            {
+                if (TryUseActiveDungeonMoveForKey(Keys.W))
+                {
+                    _dungeonProjectileCooldownRemaining = BubbleMoveCooldownSeconds;
+                }
+            }
+
+            if (_activeDungeonRun is not null)
+            {
+                if (nextPartyPressed)
+                {
+                    CycleDungeonPartyMember(1);
+                }
+                else if (previousPartyPressed)
+                {
+                    CycleDungeonPartyMember(-1);
+                }
             }
         }
 
@@ -649,6 +729,20 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         UpdateResourceProduction(deltaTime);
         UpdateWorkbenchCrafting(deltaTime);
         UpdateSpawnedPokemon(deltaTime);
+        for (int index = _activeDungeonMoveAnimations.Count - 1; index >= 0; index--)
+        {
+            DungeonMoveAnimation animation = _activeDungeonMoveAnimations[index];
+            float next = animation.TimeRemaining - deltaTime;
+            if (next <= 0f)
+            {
+                _activeDungeonMoveAnimations.RemoveAt(index);
+                continue;
+            }
+
+            _activeDungeonMoveAnimations[index] = animation with { TimeRemaining = next };
+        }
+        UpdateDungeonProjectiles(deltaTime);
+        UpdateDungeonDelayedAreaAttacks(deltaTime);
         UpdateActiveSkillBuildingDamageState();
         _interactTarget = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindInteractableTarget() : null;
         _nearbyDroppedItemIndex = _inputMode == InputMode.Gameplay && _activeDungeonRun is null ? FindNearbyDroppedWorldItemIndex() : -1;
@@ -697,6 +791,9 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         if (_activeDungeonRun is not null)
         {
             DrawActiveDungeonRoom();
+            DrawDungeonPokemon();
+            DrawDungeonProjectiles();
+            DrawDungeonMoveAnimations();
         }
         else
         {
@@ -769,6 +866,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     // Handles collides With Placed Item for this gameplay subsystem.
     private bool CollidesWithPlacedItem(Vector2 playerTopLeft)
     {
+        string playerPokemonName = GetControlledPokemonName();
         if (_activeDungeonRun is not null)
         {
             bool dungeonPlayerIsWalking = _playerMovement != Vector2.Zero;
@@ -777,7 +875,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
                 : 0;
             Rectangle dungeonPlayerBounds = GetPokemonHitbox(
                 playerTopLeft,
-                PlayerPokemonName,
+                playerPokemonName,
                 _playerDirection,
                 dungeonPlayerIsWalking,
                 _walkAnimationFrame,
@@ -791,14 +889,14 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             : 0;
         Rectangle playerBounds = GetPokemonHitbox(
             playerTopLeft,
-            PlayerPokemonName,
+            playerPokemonName,
             _playerDirection,
             playerIsWalking,
             _walkAnimationFrame,
             playerIdleFrame);
         Rectangle currentPlayerBounds = GetPokemonHitbox(
             _playerPosition,
-            PlayerPokemonName,
+            playerPokemonName,
             _playerDirection,
             playerIsWalking,
             _walkAnimationFrame,
@@ -870,13 +968,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             // anywhere on the farm (claimed or unclaimed).
             if (!HasPokemonOnFarm(spawnDefinition.Name))
             {
-                _spawnedDittos.Add(new SpawnedPokemon(
-                    _nextPokemonId++,
-                    spawnDefinition.Name,
-                    spawnPosition,
-                    Direction.Down,
-                    GetRandomMoveDelaySeconds(),
-                    spawnDefinition.SkillLevels));
+                _spawnedDittos.Add(CreateSpawnedPokemon(spawnDefinition, spawnPosition, Direction.Down, GetRandomMoveDelaySeconds()));
             }
 
             _placedItems.RemoveAt(index);
@@ -1307,7 +1399,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             : 0;
         Rectangle playerBounds = GetPokemonHitbox(
             _playerPosition,
-            PlayerPokemonName,
+            GetControlledPokemonName(),
             _playerDirection,
             playerIsWalking,
             _walkAnimationFrame,
@@ -1395,7 +1487,7 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         int mapWidthPixels = dungeon.LayoutRows[0].Length * DungeonTileSize;
         int mapHeightPixels = dungeon.LayoutRows.Count * DungeonTileSize;
         int originX = (_worldBounds.Width - mapWidthPixels) / 2;
-        int originY = (_worldBounds.Height - mapHeightPixels) / 2;
+        int originY = ((_worldBounds.Height - mapHeightPixels) / 2) - 56;
         return new Point(originX, originY);
     }
 
@@ -1437,10 +1529,10 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         float scale = PlayerRenderSize / (float)PlayerSpriteCanvasSize;
         int renderX = (int)topLeftPosition.X;
         int renderY = (int)topLeftPosition.Y + PlayerSize - (int)MathF.Round(PlayerSpriteCanvasSize * scale);
-        int resolvedOffsetX = ResolveFrameOffsetX(frames, frame, direction, isWalking);
+        (int resolvedOffsetX, int resolvedOffsetY) = ResolveFrameOffsets(frames, frame, direction, isWalking);
         Rectangle rawBounds = new Rectangle(
             renderX + (int)MathF.Round(resolvedOffsetX * scale),
-            renderY + (int)MathF.Round(frame.OffsetY * scale),
+            renderY + (int)MathF.Round(resolvedOffsetY * scale),
             (int)MathF.Round(frame.Source.Width * scale),
             (int)MathF.Round(frame.Source.Height * scale));
 
@@ -1457,27 +1549,38 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
         return new Rectangle(hitbox.X + inset, hitbox.Y + inset, width, height);
     }
 
-    // Keeps directional walk frames anchored to the same X origin as idle when needed.
-    private static int ResolveFrameOffsetX(Dictionary<string, SpriteFrame> frames, SpriteFrame frame, Direction direction, bool isWalking)
+    // Keeps directional walk frames anchored to the same idle-frame origin so sprites/hitboxes do not drift while moving.
+    private static (int OffsetX, int OffsetY) ResolveFrameOffsets(
+        Dictionary<string, SpriteFrame> frames,
+        SpriteFrame frame,
+        Direction direction,
+        bool isWalking)
     {
-        if (isWalking && (direction == Direction.Down || direction == Direction.Up))
+        if (isWalking)
         {
-            int directionIndex = direction == Direction.Down ? 0 : 4;
+            int directionIndex = direction switch
+            {
+                Direction.Down => 0,
+                Direction.Right => 2,
+                Direction.Up => 4,
+                Direction.Left => 6,
+                _ => 0
+            };
             string idleKey = $"Normal/Idle/Anim/{directionIndex}/0000";
             if (frames.TryGetValue(idleKey, out SpriteFrame? idleFrame))
             {
-                return idleFrame.OffsetX;
+                return (idleFrame.OffsetX, idleFrame.OffsetY);
             }
         }
 
-        return frame.OffsetX;
+        return (frame.OffsetX, frame.OffsetY);
     }
 
     // Normalizes hitbox size across facings by using the smallest idle-frame footprint and anchoring at sprite bottom-center.
     private static Rectangle BuildStableCollisionBounds(Dictionary<string, SpriteFrame> frames, Rectangle rawBounds, float scale)
     {
-        int targetWidth = rawBounds.Width;
-        int targetHeight = rawBounds.Height;
+        int targetWidth = int.MaxValue;
+        int targetHeight = int.MaxValue;
 
         string[] idleBaseKeys =
         [
@@ -1500,6 +1603,12 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
             targetHeight = Math.Min(targetHeight, idleHeight);
         }
 
+        if (targetWidth == int.MaxValue || targetHeight == int.MaxValue)
+        {
+            targetWidth = rawBounds.Width;
+            targetHeight = rawBounds.Height;
+        }
+
         int adjustedX = rawBounds.X + ((rawBounds.Width - targetWidth) / 2);
         int adjustedY = rawBounds.Bottom - targetHeight;
         return new Rectangle(adjustedX, adjustedY, targetWidth, targetHeight);
@@ -1520,6 +1629,415 @@ public sealed partial class FarmGame : Microsoft.Xna.Framework.Game
     private static float GetRandomMoveDelaySeconds()
     {
         return Random.Shared.NextSingle() * (SpawnedPokemonMaxMoveDelay - SpawnedPokemonMinMoveDelay) + SpawnedPokemonMinMoveDelay;
+    }
+
+    private SpawnedPokemon CreateSpawnedPokemon(SpawnedPokemonDefinition definition, Vector2 position, Direction direction, float moveCooldownRemaining)
+    {
+        int maxHp = CalculateMaxHp(definition.BaseStats, 50);
+        return new SpawnedPokemon(
+            _nextPokemonId++,
+            definition.Name,
+            position,
+            direction,
+            moveCooldownRemaining,
+            definition.SkillLevels,
+            Level: 50,
+            BaseStats: definition.BaseStats,
+            CurrentHp: maxHp,
+            MaxHp: maxHp);
+    }
+
+    private static int CalculateMaxHp(PokemonBattleStats stats, int level)
+    {
+        int hp = ((2 * stats.Hp * level) / 100) + level + 10;
+        return Math.Max(1, hp);
+    }
+
+    private static int CalculateStat(int baseStat, int level)
+    {
+        int stat = ((2 * baseStat * level) / 100) + 5;
+        return Math.Max(1, stat);
+    }
+
+    private static int CalculateMoveDamage(SpawnedPokemon attacker, SpawnedPokemon defender, int power)
+    {
+        if (attacker.BaseStats is not PokemonBattleStats atkBase || defender.BaseStats is not PokemonBattleStats defBase)
+        {
+            return 1;
+        }
+
+        int level = Math.Max(1, attacker.Level);
+        int attack = CalculateStat(atkBase.Attack, level);
+        int defense = Math.Max(1, CalculateStat(defBase.Defense, Math.Max(1, defender.Level)));
+        int baseDamage = (((((2 * level) / 5) + 2) * power * attack / defense) / 50) + 2;
+        bool stab = string.Equals(attacker.Name, "Ditto", StringComparison.OrdinalIgnoreCase) ? false : false;
+        float modifier = stab ? 1.5f : 1f;
+        return Math.Max(1, (int)MathF.Floor(baseDamage * modifier));
+    }
+
+    private Rectangle GetCutHitboxBounds()
+    {
+        const int width = 30;
+        const int depth = 38;
+        string activePokemonName = GetControlledPokemonName();
+        Rectangle playerBox = GetPokemonHitbox(_playerPosition, activePokemonName, _playerDirection, _playerMovement != Vector2.Zero, _walkAnimationFrame, _playerIdleAnimationFrame);
+        return _playerDirection switch
+        {
+            Direction.Up => new Rectangle(playerBox.Center.X - (width / 2), playerBox.Top - depth, width, depth),
+            Direction.Down => new Rectangle(playerBox.Center.X - (width / 2), playerBox.Bottom, width, depth),
+            Direction.Left => new Rectangle(playerBox.Left - depth, playerBox.Center.Y - (width / 2), depth, width),
+            Direction.Right => new Rectangle(playerBox.Right, playerBox.Center.Y - (width / 2), depth, width),
+            _ => new Rectangle(playerBox.Center.X - (width / 2), playerBox.Bottom, width, depth)
+        };
+    }
+
+    private void TryUseDungeonCut()
+    {
+        if (_activeDungeonRun is null)
+        {
+            return;
+        }
+
+        Rectangle cutHitbox = GetCutHitboxBounds();
+        _activeDungeonMoveAnimations.Add(new DungeonMoveAnimation(cutHitbox, CutAnimationDurationSeconds, CutAnimationDurationSeconds, "CUT"));
+
+        for (int index = _dungeonPokemon.Count - 1; index >= 0; index--)
+        {
+            SpawnedPokemon target = _dungeonPokemon[index];
+            Rectangle targetBounds = GetPokemonHitbox(target.Position, target.Name, target.Direction, false, 0, 0);
+            if (!cutHitbox.Intersects(targetBounds))
+            {
+                continue;
+            }
+
+            int damage = CalculateMoveDamage(
+                new SpawnedPokemon(0, GetControlledPokemonName(), _playerPosition, _playerDirection, 0f, BaseStats: SpawnedPokemonCatalog.GetOrDefault(GetControlledPokemonName()).BaseStats, CurrentHp: 1, MaxHp: 1),
+                target,
+                CutPower);
+            int nextHp = Math.Max(0, target.CurrentHp - damage);
+            if (nextHp <= 0)
+            {
+                _dungeonPokemon.RemoveAt(index);
+                continue;
+            }
+
+            _dungeonPokemon[index] = target with { CurrentHp = nextHp };
+        }
+    }
+
+    private void TryUseDungeonBubble()
+    {
+        if (_activeDungeonRun is null)
+        {
+            return;
+        }
+
+        Vector2 launchDirection = _playerMovement;
+        if (launchDirection == Vector2.Zero)
+        {
+            launchDirection = DirectionToMovement(_playerDirection);
+        }
+
+        if (launchDirection == Vector2.Zero)
+        {
+            launchDirection = new Vector2(0f, 1f);
+        }
+
+        launchDirection.Normalize();
+        string activePokemonName = GetControlledPokemonName();
+        Rectangle playerBounds = GetPokemonHitbox(_playerPosition, activePokemonName, _playerDirection, _playerMovement != Vector2.Zero, _walkAnimationFrame, _playerIdleAnimationFrame);
+        Vector2 spawnPosition = new(playerBounds.Center.X, playerBounds.Center.Y);
+        _activeDungeonProjectiles.Add(new DungeonProjectile(spawnPosition, launchDirection, BubbleSpeed, BubblePower, BubbleRadius, "BUBBLE"));
+    }
+
+    private void TryUseDungeonDischarge()
+    {
+        if (_activeDungeonRun is null)
+        {
+            return;
+        }
+
+        Vector2 center = new(_playerPosition.X + (PlayerSize / 2f), _playerPosition.Y + (PlayerSize / 2f));
+        _activeDungeonDelayedAreaAttacks.Add(new DungeonDelayedAreaAttack(
+            center,
+            Radius: 60f,
+            DelayRemaining: 0.1f,
+            Damage: 80,
+            MoveName: "DISCHARGE",
+            AttackerName: GetControlledPokemonName()));
+    }
+
+    private bool TryConsumeDungeonPp(int amount)
+    {
+        if (_activeDungeonRun is null)
+        {
+            return false;
+        }
+
+        int required = Math.Max(0, amount);
+        int partyIndex = GetControlledPokemonPartyIndex();
+        if (partyIndex < 0 || partyIndex >= _dungeonPartyCurrentPp.Count)
+        {
+            return false;
+        }
+
+        if (_dungeonPartyCurrentPp[partyIndex] < required)
+        {
+            _interactionMessage = "NOT ENOUGH PP";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return false;
+        }
+
+        _dungeonPartyCurrentPp[partyIndex] -= required;
+        return true;
+    }
+
+    private bool TryUseActiveDungeonMoveForKey(Keys key)
+    {
+        if (_activeDungeonRun is null)
+        {
+            return false;
+        }
+
+        DungeonMoveDefinition? move = GetDungeonMovesForPokemon(GetControlledPokemonName())
+            .FirstOrDefault(definition => definition.Hotkey == key);
+        if (move is null)
+        {
+            return false;
+        }
+
+        if (!TryConsumeDungeonPp(move.Value.PpCost))
+        {
+            return false;
+        }
+
+        switch (move.Value.Name)
+        {
+            case "CUT":
+                TryUseDungeonCut();
+                return true;
+            case "BUBBLE":
+                TryUseDungeonBubble();
+                return true;
+            case "DISCHARGE":
+                TryUseDungeonDischarge();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static IReadOnlyList<DungeonMoveDefinition> GetDungeonMovesForPokemon(string pokemonName)
+    {
+        if (string.Equals(pokemonName, "Rotom", StringComparison.OrdinalIgnoreCase))
+        {
+            return RotomDungeonMoves;
+        }
+
+        return DittoDungeonMoves;
+    }
+
+    private void UpdateDungeonProjectiles(float deltaTime)
+    {
+        if (_activeDungeonRun is null)
+        {
+            _activeDungeonProjectiles.Clear();
+            return;
+        }
+
+        for (int projectileIndex = _activeDungeonProjectiles.Count - 1; projectileIndex >= 0; projectileIndex--)
+        {
+            DungeonProjectile projectile = _activeDungeonProjectiles[projectileIndex];
+            Vector2 nextPosition = projectile.Position + (projectile.Direction * projectile.Speed * deltaTime);
+            Rectangle nextBounds = new(
+                (int)(nextPosition.X - projectile.Radius),
+                (int)(nextPosition.Y - projectile.Radius),
+                projectile.Radius * 2,
+                projectile.Radius * 2);
+
+            if (CollidesWithActiveDungeonMap(nextBounds))
+            {
+                _activeDungeonProjectiles.RemoveAt(projectileIndex);
+                continue;
+            }
+
+            bool hitPokemon = false;
+            for (int pokemonIndex = _dungeonPokemon.Count - 1; pokemonIndex >= 0; pokemonIndex--)
+            {
+                SpawnedPokemon pokemon = _dungeonPokemon[pokemonIndex];
+                Rectangle pokemonBounds = GetPokemonHitbox(pokemon.Position, pokemon.Name, pokemon.Direction, false, 0, 0);
+                if (!nextBounds.Intersects(pokemonBounds))
+                {
+                    continue;
+                }
+
+                int damage = CalculateMoveDamage(
+                    new SpawnedPokemon(0, GetControlledPokemonName(), _playerPosition, _playerDirection, 0f, BaseStats: SpawnedPokemonCatalog.GetOrDefault(GetControlledPokemonName()).BaseStats, CurrentHp: 1, MaxHp: 1),
+                    pokemon,
+                    projectile.Damage);
+                int nextHp = Math.Max(0, pokemon.CurrentHp - damage);
+                if (nextHp <= 0)
+                {
+                    _dungeonPokemon.RemoveAt(pokemonIndex);
+                }
+                else
+                {
+                    _dungeonPokemon[pokemonIndex] = pokemon with { CurrentHp = nextHp };
+                }
+
+                hitPokemon = true;
+                break;
+            }
+
+            if (hitPokemon)
+            {
+                _activeDungeonProjectiles.RemoveAt(projectileIndex);
+                continue;
+            }
+
+            _activeDungeonProjectiles[projectileIndex] = projectile with { Position = nextPosition };
+        }
+    }
+
+    private void UpdateDungeonDelayedAreaAttacks(float deltaTime)
+    {
+        if (_activeDungeonRun is null)
+        {
+            _activeDungeonDelayedAreaAttacks.Clear();
+            return;
+        }
+
+        for (int attackIndex = _activeDungeonDelayedAreaAttacks.Count - 1; attackIndex >= 0; attackIndex--)
+        {
+            DungeonDelayedAreaAttack attack = _activeDungeonDelayedAreaAttacks[attackIndex];
+            float next = attack.DelayRemaining - deltaTime;
+            if (next > 0f)
+            {
+                _activeDungeonDelayedAreaAttacks[attackIndex] = attack with { DelayRemaining = next };
+                continue;
+            }
+
+            for (int pokemonIndex = _dungeonPokemon.Count - 1; pokemonIndex >= 0; pokemonIndex--)
+            {
+                SpawnedPokemon target = _dungeonPokemon[pokemonIndex];
+                Rectangle bounds = GetPokemonHitbox(target.Position, target.Name, target.Direction, false, 0, 0);
+                Vector2 center = new(bounds.Center.X, bounds.Center.Y);
+                if (Vector2.DistanceSquared(center, attack.Center) > attack.Radius * attack.Radius)
+                {
+                    continue;
+                }
+
+                int damage = CalculateMoveDamage(
+                    new SpawnedPokemon(0, attack.AttackerName, _playerPosition, _playerDirection, 0f, BaseStats: SpawnedPokemonCatalog.GetOrDefault(attack.AttackerName).BaseStats, CurrentHp: 1, MaxHp: 1),
+                    target,
+                    attack.Damage);
+                int nextHp = Math.Max(0, target.CurrentHp - damage);
+                if (nextHp <= 0)
+                {
+                    _dungeonPokemon.RemoveAt(pokemonIndex);
+                }
+                else
+                {
+                    _dungeonPokemon[pokemonIndex] = target with { CurrentHp = nextHp };
+                }
+            }
+
+            Rectangle animationBounds = new(
+                (int)(attack.Center.X - attack.Radius),
+                (int)(attack.Center.Y - attack.Radius),
+                (int)(attack.Radius * 2f),
+                (int)(attack.Radius * 2f));
+            _activeDungeonMoveAnimations.Add(new DungeonMoveAnimation(animationBounds, 0.12f, 0.12f, attack.MoveName));
+            _activeDungeonDelayedAreaAttacks.RemoveAt(attackIndex);
+        }
+    }
+
+    private void CycleDungeonPartyMember(int directionStep)
+    {
+        if (_activeDungeonRun is null || _dungeonPartyPokemonNames.Count <= 0)
+        {
+            return;
+        }
+
+        int previousIndex = _activeDungeonPartyIndex;
+        int count = _dungeonPartyPokemonNames.Count;
+        _activeDungeonPartyIndex = (_activeDungeonPartyIndex + directionStep + count) % count;
+        if (!TryResolveDungeonSwapCollision())
+        {
+            _activeDungeonPartyIndex = previousIndex;
+            _interactionMessage = "NO ROOM TO SWAP HERE";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
+        _dungeonSwapLockRemaining = DungeonSwapLockSeconds;
+    }
+
+    private bool TryResolveDungeonSwapCollision()
+    {
+        if (_activeDungeonRun is null)
+        {
+            return true;
+        }
+
+        if (!CollidesWithPlacedItem(_playerPosition))
+        {
+            return true;
+        }
+
+        Rectangle mapBounds = GetActiveDungeonMapBounds(_activeDungeonRun);
+        int[] radii = [DungeonTileSize / 2, DungeonTileSize, DungeonTileSize * 2, DungeonTileSize * 3];
+        foreach (int radius in radii)
+        {
+            foreach (Point offset in GetSwapOffsets(radius))
+            {
+                Vector2 candidate = new(_playerPosition.X + offset.X, _playerPosition.Y + offset.Y);
+                candidate.X = MathHelper.Clamp(candidate.X, mapBounds.Left, mapBounds.Right - PlayerSize);
+                candidate.Y = MathHelper.Clamp(candidate.Y, mapBounds.Top, mapBounds.Bottom - PlayerSize);
+                if (CollidesWithPlacedItem(candidate))
+                {
+                    continue;
+                }
+
+                _playerPosition = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<Point> GetSwapOffsets(int radius)
+    {
+        yield return new Point(radius, 0);
+        yield return new Point(-radius, 0);
+        yield return new Point(0, radius);
+        yield return new Point(0, -radius);
+        yield return new Point(radius, radius);
+        yield return new Point(radius, -radius);
+        yield return new Point(-radius, radius);
+        yield return new Point(-radius, -radius);
+    }
+
+    private string GetControlledPokemonName()
+    {
+        if (_activeDungeonRun is null || _dungeonPartyPokemonNames.Count <= 0)
+        {
+            return PlayerPokemonName;
+        }
+
+        _activeDungeonPartyIndex = Math.Clamp(_activeDungeonPartyIndex, 0, _dungeonPartyPokemonNames.Count - 1);
+        return _dungeonPartyPokemonNames[_activeDungeonPartyIndex];
+    }
+
+    private int GetControlledPokemonPartyIndex()
+    {
+        if (_dungeonPartyPokemonNames.Count <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Clamp(_activeDungeonPartyIndex, 0, _dungeonPartyPokemonNames.Count - 1);
     }
 
     // Computes and returns whether this Pokemon should attempt a wander step this cycle.

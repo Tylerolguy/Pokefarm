@@ -704,7 +704,11 @@ public sealed partial class FarmGame
                 wanderTarget,
                 savedPokemon.IdleAnimationTimer,
                 savedPokemon.IdleAnimationFrame,
-                savedPokemon.IdleCyclePauseRemaining));
+                savedPokemon.IdleCyclePauseRemaining,
+                50,
+                SpawnedPokemonCatalog.GetOrDefault(savedPokemon.Name).BaseStats,
+                CalculateMaxHp(SpawnedPokemonCatalog.GetOrDefault(savedPokemon.Name).BaseStats, 50),
+                CalculateMaxHp(SpawnedPokemonCatalog.GetOrDefault(savedPokemon.Name).BaseStats, 50)));
         }
 
         _droppedWorldItems.Clear();

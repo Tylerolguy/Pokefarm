@@ -26,7 +26,11 @@ internal sealed record SpawnedPokemon(
     Vector2? WanderTarget = null,
     float IdleAnimationTimer = 0f,
     int IdleAnimationFrame = 0,
-    float IdleCyclePauseRemaining = 0f)
+    float IdleCyclePauseRemaining = 0f,
+    int Level = 50,
+    PokemonBattleStats? BaseStats = null,
+    int CurrentHp = 1,
+    int MaxHp = 1)
 {
     // Computes and returns skill Level without mutating persistent game state.
     public int GetSkillLevel(SkillType skillType)

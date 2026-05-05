@@ -532,7 +532,78 @@ public sealed partial class FarmGame
                     idleFrame: pokemon.IsMoving ? 0 : pokemon.IdleAnimationFrame);
             }
             DrawStatusMarker(pokemon);
+            DrawPokemonHpBar(pokemon);
         }
+    }
+
+    private void DrawDungeonPokemon()
+    {
+        if (_spriteBatch is null)
+        {
+            return;
+        }
+
+        foreach (SpawnedPokemon pokemon in _dungeonPokemon)
+        {
+            DrawPokemonAt(pokemon.Position, pokemon.Name, pokemon.Direction, false, 0, 0);
+            DrawPokemonHpBar(pokemon);
+        }
+    }
+
+    private void DrawDungeonMoveAnimations()
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        foreach (DungeonMoveAnimation animation in _activeDungeonMoveAnimations)
+        {
+            float progress = 1f - (animation.TimeRemaining / Math.Max(0.001f, animation.TotalDuration));
+            byte alpha = (byte)MathHelper.Lerp(210f, 20f, progress);
+            Color tint = new Color((byte)210, (byte)250, (byte)210, alpha);
+            _spriteBatch.Draw(_pixel, animation.Bounds, tint);
+            DrawPanelBorder(animation.Bounds, new Color((byte)120, (byte)210, (byte)120, alpha));
+        }
+    }
+
+    private void DrawDungeonProjectiles()
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        foreach (DungeonProjectile projectile in _activeDungeonProjectiles)
+        {
+            int diameter = projectile.Radius * 2;
+            Rectangle bounds = new(
+                (int)(projectile.Position.X - projectile.Radius),
+                (int)(projectile.Position.Y - projectile.Radius),
+                diameter,
+                diameter);
+            _spriteBatch.Draw(_pixel, bounds, new Color(142, 210, 255, 220));
+            DrawPanelBorder(bounds, new Color(196, 236, 255, 220));
+        }
+    }
+
+    private void DrawPokemonHpBar(SpawnedPokemon pokemon)
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        int barWidth = 34;
+        int barHeight = 5;
+        int x = (int)pokemon.Position.X + (PlayerSize / 2) - (barWidth / 2);
+        int y = (int)pokemon.Position.Y - 10;
+        Rectangle outer = new(x, y, barWidth, barHeight);
+        float ratio = pokemon.MaxHp > 0 ? MathHelper.Clamp(pokemon.CurrentHp / (float)pokemon.MaxHp, 0f, 1f) : 0f;
+        Rectangle fill = new(x + 1, y + 1, Math.Max(1, (int)((barWidth - 2) * ratio)), barHeight - 2);
+        Color fillColor = ratio > 0.5f ? new Color(92, 196, 108) : ratio > 0.2f ? new Color(232, 198, 86) : new Color(214, 86, 86);
+        _spriteBatch.Draw(_pixel, outer, new Color(20, 20, 20, 220));
+        _spriteBatch.Draw(_pixel, fill, fillColor);
     }
 
     // Draws pokemon Hitbox for the current frame using the active render context.
@@ -1207,6 +1278,7 @@ public sealed partial class FarmGame
         Rectangle panel = new(viewport.Width / 2 - 420, viewport.Height / 2 - 250, 840, 500);
         Rectangle dungeonListArea = new(panel.X + 24, panel.Y + 78, 280, panel.Height - 120);
         Rectangle roomPreviewArea = new(dungeonListArea.Right + 18, panel.Y + 78, panel.Right - dungeonListArea.Right - 42, panel.Height - 120);
+        Rectangle partyArea = new(panel.X + 24, panel.Bottom - 80, panel.Width - 48, 52);
 
         _spriteBatch.Draw(_pixel, overlay, new Color(12, 12, 14, 215));
         _spriteBatch.Draw(_pixel, panel, new Color(62, 62, 68, 245));
@@ -1237,6 +1309,22 @@ public sealed partial class FarmGame
         _spriteBatch.Draw(_pixel, roomPreviewArea, new Color(48, 48, 54));
         DrawPanelBorder(roomPreviewArea, new Color(126, 126, 132));
         DrawPixelText("ROOM PREVIEW", new Vector2(roomPreviewArea.X + 12, roomPreviewArea.Y + 10), new Color(230, 230, 236));
+        _spriteBatch.Draw(_pixel, partyArea, new Color(48, 48, 54));
+        DrawPanelBorder(partyArea, new Color(126, 126, 132));
+        DrawPixelText("PARTY ENTERING", new Vector2(partyArea.X + 12, partyArea.Y + 8), new Color(230, 230, 236));
+        List<string> enteringParty = GetDungeonPartyForEntry();
+        for (int index = 0; index < 6; index++)
+        {
+            Rectangle iconSlot = new(partyArea.X + 180 + (index * 48), partyArea.Y + 6, 40, 40);
+            _spriteBatch.Draw(_pixel, iconSlot, new Color(24, 42, 78));
+            DrawPanelBorder(iconSlot, new Color(120, 168, 236));
+            if (index < enteringParty.Count &&
+                TryGetPokemonIconTexture(enteringParty[index], out Texture2D? memberIcon) &&
+                memberIcon is not null)
+            {
+                _spriteBatch.Draw(memberIcon, new Rectangle(iconSlot.X + 3, iconSlot.Y + 3, iconSlot.Width - 6, iconSlot.Height - 6), Color.White);
+            }
+        }
 
         if (_generatedDungeonPreview is null)
         {
@@ -1341,19 +1429,20 @@ public sealed partial class FarmGame
     // Draws player for the current frame using the active render context.
     private void DrawPlayer()
     {
+        string playerPokemonName = GetControlledPokemonName();
         bool isWalking = _playerMovement != Vector2.Zero;
         int idleFrame = !isWalking && _playerIdleStationaryTimer >= PlayerIdleStartDelaySeconds
             ? _playerIdleAnimationFrame
             : 0;
-        DrawPokemonAt(_playerPosition, PlayerPokemonName, _playerDirection, isWalking, _walkAnimationFrame, idleFrame);
+        DrawPokemonAt(_playerPosition, playerPokemonName, _playerDirection, isWalking, _walkAnimationFrame, idleFrame);
         if (_isHitboxDisplayMode)
         {
-            DrawPlayerHitbox(_playerDirection, isWalking, _walkAnimationFrame, idleFrame);
+            DrawPlayerHitbox(playerPokemonName, _playerDirection, isWalking, _walkAnimationFrame, idleFrame);
         }
     }
 
     // Draws the player hitbox when hitbox-display mode is enabled.
-    private void DrawPlayerHitbox(Direction direction, bool isWalking, int walkFrame, int idleFrame)
+    private void DrawPlayerHitbox(string pokemonName, Direction direction, bool isWalking, int walkFrame, int idleFrame)
     {
         if (_spriteBatch is null || _pixel is null)
         {
@@ -1362,7 +1451,7 @@ public sealed partial class FarmGame
 
         Rectangle hitbox = GetPokemonHitbox(
             _playerPosition,
-            PlayerPokemonName,
+            pokemonName,
             direction,
             isWalking,
             walkFrame,
@@ -1417,11 +1506,11 @@ public sealed partial class FarmGame
         float scale = PlayerRenderSize / (float)PlayerSpriteCanvasSize;
         int renderX = (int)topLeftPosition.X;
         int renderY = (int)topLeftPosition.Y + PlayerSize - (int)MathF.Round(PlayerSpriteCanvasSize * scale);
-        int resolvedOffsetX = ResolveFrameOffsetX(frames, frame, direction, isWalking);
+        (int resolvedOffsetX, int resolvedOffsetY) = ResolveFrameOffsets(frames, frame, direction, isWalking);
 
         Rectangle destination = new(
             renderX + (int)MathF.Round(resolvedOffsetX * scale),
-            renderY + (int)MathF.Round(frame.OffsetY * scale),
+            renderY + (int)MathF.Round(resolvedOffsetY * scale),
             (int)MathF.Round(frame.Source.Width * scale),
             (int)MathF.Round(frame.Source.Height * scale));
 
@@ -1440,7 +1529,8 @@ public sealed partial class FarmGame
 
         if (_activeDungeonRun is not null)
         {
-            DrawPromptPanel(_activeDungeonRun.DungeonName.ToUpperInvariant(), new Point(GraphicsDevice.Viewport.Width / 2, 48));
+            DrawPromptPanel(_activeDungeonRun.DungeonName.ToUpperInvariant(), new Point(GraphicsDevice.Viewport.Width / 2, 34));
+            DrawDungeonHud();
 
             if (!string.IsNullOrEmpty(_interactionMessage))
             {
@@ -1485,6 +1575,78 @@ public sealed partial class FarmGame
         if (!string.IsNullOrEmpty(_interactionMessage))
         {
             DrawPromptPanel(_interactionMessage, new Point(GraphicsDevice.Viewport.Width / 2, 48));
+        }
+    }
+
+    private void DrawDungeonHud()
+    {
+        if (_spriteBatch is null || _pixel is null)
+        {
+            return;
+        }
+
+        Viewport viewport = GraphicsDevice.Viewport;
+        Rectangle statusPanel = new(14, viewport.Height - 146, 250, 132);
+        Rectangle movesPanel = new(statusPanel.Right + 10, viewport.Height - 146, 456, 132);
+        Rectangle partyPanel = new(movesPanel.Right + 10, viewport.Height - 146, viewport.Width - (movesPanel.Right + 24), 132);
+
+        _spriteBatch.Draw(_pixel, statusPanel, new Color(20, 26, 34, 230));
+        _spriteBatch.Draw(_pixel, movesPanel, new Color(20, 26, 34, 230));
+        _spriteBatch.Draw(_pixel, partyPanel, new Color(20, 26, 34, 230));
+        DrawPanelBorder(statusPanel, new Color(108, 148, 188));
+        DrawPanelBorder(movesPanel, new Color(108, 148, 188));
+        DrawPanelBorder(partyPanel, new Color(108, 148, 188));
+
+        string activePokemonName = GetControlledPokemonName();
+        DrawPixelText(activePokemonName.ToUpperInvariant(), new Vector2(statusPanel.X + 74, statusPanel.Y + 8), new Color(236, 220, 196));
+        DrawPixelText($"HP {_dungeonDittoCurrentHp}/{_dungeonDittoMaxHp}", new Vector2(statusPanel.X + 74, statusPanel.Y + 34), new Color(236, 220, 196));
+        int activePartyIndex = GetControlledPokemonPartyIndex();
+        int currentPp = activePartyIndex >= 0 && activePartyIndex < _dungeonPartyCurrentPp.Count ? _dungeonPartyCurrentPp[activePartyIndex] : 0;
+        int maxPp = activePartyIndex >= 0 && activePartyIndex < _dungeonPartyMaxPp.Count ? _dungeonPartyMaxPp[activePartyIndex] : DungeonDittoMaxPp;
+        DrawPixelText($"PP {currentPp}/{maxPp}", new Vector2(statusPanel.X + 74, statusPanel.Y + 54), new Color(170, 210, 255));
+        DrawPixelText("F NEXT  D PREV", new Vector2(statusPanel.X + 10, statusPanel.Bottom - 20), new Color(170, 210, 255));
+
+        Rectangle portrait = new(statusPanel.X + 10, statusPanel.Y + 20, 52, 52);
+        _spriteBatch.Draw(_pixel, portrait, new Color(32, 44, 60));
+        DrawPanelBorder(portrait, new Color(160, 200, 236));
+        if (TryGetPokemonIconTexture(activePokemonName, out Texture2D? dittoIcon) && dittoIcon is not null)
+        {
+            _spriteBatch.Draw(dittoIcon, new Rectangle(portrait.X + 4, portrait.Y + 4, portrait.Width - 8, portrait.Height - 8), Color.White);
+        }
+
+        DrawPixelText("MOVES", new Vector2(movesPanel.X + 10, movesPanel.Y + 8), new Color(236, 220, 196));
+        IReadOnlyList<DungeonMoveDefinition> activeMoves = GetDungeonMovesForPokemon(activePokemonName);
+        string[] moveLabels = ["-", "-", "-", "-"];
+        string[] moveCosts = ["EMPTY", "EMPTY", "EMPTY", "EMPTY"];
+        for (int index = 0; index < activeMoves.Count && index < 4; index++)
+        {
+            DungeonMoveDefinition move = activeMoves[index];
+            moveLabels[index] = $"{move.Hotkey} {move.Name}";
+            moveCosts[index] = $"PP {move.PpCost}";
+        }
+        for (int index = 0; index < 4; index++)
+        {
+            int col = index % 2;
+            int row = index / 2;
+            Rectangle moveSlot = new(movesPanel.X + 10 + (col * 220), movesPanel.Y + 28 + (row * 48), 210, 42);
+            _spriteBatch.Draw(_pixel, moveSlot, new Color(32, 44, 60));
+            DrawPanelBorder(moveSlot, new Color(124, 170, 212));
+            DrawPixelText(moveLabels[index], new Vector2(moveSlot.X + 8, moveSlot.Y + 8), new Color(236, 220, 196));
+            DrawPixelText(moveCosts[index], new Vector2(moveSlot.X + 8, moveSlot.Y + 24), new Color(170, 210, 255));
+        }
+
+        DrawPixelText("PARTY", new Vector2(partyPanel.X + 10, partyPanel.Y + 8), new Color(236, 220, 196));
+        for (int index = 0; index < 6; index++)
+        {
+            Rectangle slot = new(partyPanel.X + 10 + (index * 54), partyPanel.Y + 34, 46, 46);
+            _spriteBatch.Draw(_pixel, slot, new Color(32, 44, 60));
+            DrawPanelBorder(slot, new Color(124, 170, 212));
+            if (index < _dungeonPartyPokemonNames.Count &&
+                TryGetPokemonIconTexture(_dungeonPartyPokemonNames[index], out Texture2D? memberIcon) &&
+                memberIcon is not null)
+            {
+                _spriteBatch.Draw(memberIcon, new Rectangle(slot.X + 4, slot.Y + 4, slot.Width - 8, slot.Height - 8), Color.White);
+            }
         }
     }
 

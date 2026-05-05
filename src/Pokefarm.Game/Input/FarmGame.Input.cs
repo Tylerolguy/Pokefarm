@@ -1440,13 +1440,7 @@ public sealed partial class FarmGame
         }
 
         SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(pokemonName);
-        _spawnedDittos.Add(new SpawnedPokemon(
-            _nextPokemonId++,
-            spawnDefinition.Name,
-            spawnPosition,
-            Direction.Down,
-            GetRandomMoveDelaySeconds(),
-            spawnDefinition.SkillLevels));
+        _spawnedDittos.Add(CreateSpawnedPokemon(spawnDefinition, spawnPosition, Direction.Down, GetRandomMoveDelaySeconds()));
         return true;
     }
 
@@ -1847,13 +1841,7 @@ public sealed partial class FarmGame
         }
 
         SpawnedPokemonDefinition spawnDefinition = SpawnedPokemonCatalog.GetOrDefault(pokemonName);
-        _spawnedDittos.Add(new SpawnedPokemon(
-            _nextPokemonId++,
-            spawnDefinition.Name,
-            spawnPosition,
-            Direction.Down,
-            GetRandomMoveDelaySeconds(),
-            spawnDefinition.SkillLevels));
+        _spawnedDittos.Add(CreateSpawnedPokemon(spawnDefinition, spawnPosition, Direction.Down, GetRandomMoveDelaySeconds()));
         _storedPcPokemonNames.RemoveAt(storedIndex);
         _interactionMessage = actionLabel == "PLACE ON FARM"
             ? $"{spawnDefinition.Name.ToUpperInvariant()} PLACED ON FARM"
@@ -2003,9 +1991,18 @@ public sealed partial class FarmGame
             return;
         }
 
+        List<string> partyToEnter = GetDungeonPartyForEntry();
+        int followerCount = Math.Max(0, partyToEnter.Count - 1);
+        if (followerCount > MaxDungeonFollowersAtStart)
+        {
+            _interactionMessage = $"TOO MANY FOLLOWERS {followerCount}/{MaxDungeonFollowersAtStart}";
+            _interactionMessageTimer = InteractionMessageDuration;
+            return;
+        }
+
         GeneratedDungeon generatedDungeon = DungeonGenerator.Generate(dungeonDefinition);
         _generatedDungeonPreview = generatedDungeon;
-        EnterDungeonRun(generatedDungeon);
+        EnterDungeonRun(generatedDungeon, partyToEnter);
         _interactionMessage = $"ENTERED {dungeonDefinition.Name.ToUpperInvariant()}";
         _interactionMessageTimer = InteractionMessageDuration;
     }
@@ -2051,9 +2048,33 @@ public sealed partial class FarmGame
     }
 
     // Handles enter Dungeon Run for this gameplay subsystem.
-    private void EnterDungeonRun(GeneratedDungeon dungeonRun)
+    private void EnterDungeonRun(GeneratedDungeon dungeonRun, IReadOnlyList<string> partyToEnter)
     {
         _activeDungeonRun = dungeonRun;
+        _dungeonPokemon.Clear();
+        _activeDungeonMoveAnimations.Clear();
+        _activeDungeonProjectiles.Clear();
+        _dungeonMoveCooldownRemaining = 0f;
+        _dungeonProjectileCooldownRemaining = 0f;
+        _dungeonPartyPokemonNames.Clear();
+        _dungeonPartyPokemonNames.AddRange(partyToEnter);
+        if (_dungeonPartyPokemonNames.Count == 0)
+        {
+            _dungeonPartyPokemonNames.Add(PlayerPokemonName);
+        }
+        _dungeonPartyCurrentPp.Clear();
+        _dungeonPartyMaxPp.Clear();
+        foreach (string partyPokemonName in _dungeonPartyPokemonNames)
+        {
+            int maxPp = DungeonDittoMaxPp;
+            _dungeonPartyMaxPp.Add(maxPp);
+            _dungeonPartyCurrentPp.Add(maxPp);
+        }
+        _activeDungeonPartyIndex = 0;
+        SpawnedPokemonDefinition dittoDefinition = SpawnedPokemonCatalog.GetOrDefault(PlayerPokemonName);
+        _dungeonDittoMaxHp = CalculateMaxHp(dittoDefinition.BaseStats, 50);
+        _dungeonDittoCurrentHp = _dungeonDittoMaxHp;
+        _dungeonDittoCurrentPp = _dungeonPartyCurrentPp[0];
         _inputMode = InputMode.Gameplay;
         _interactTarget = null;
         _talkTargetIndex = -1;
@@ -2061,6 +2082,26 @@ public sealed partial class FarmGame
         _playerPosition = new Vector2(
             mapOrigin.X + (dungeonRun.PlayerStartTile.X * DungeonTileSize),
             mapOrigin.Y + (dungeonRun.PlayerStartTile.Y * DungeonTileSize));
+
+        if (string.Equals(dungeonRun.DungeonName, "Tutorial Cavern", StringComparison.OrdinalIgnoreCase))
+        {
+            SpawnedPokemonDefinition abra = SpawnedPokemonCatalog.GetOrDefault("Abra");
+            Vector2 abraPosition = new(
+                mapOrigin.X + (9 * DungeonTileSize),
+                mapOrigin.Y + (20 * DungeonTileSize));
+            _dungeonPokemon.Add(CreateSpawnedPokemon(abra, abraPosition, Direction.Left, 0f));
+        }
+    }
+
+    private List<string> GetDungeonPartyForEntry()
+    {
+        List<string> party = [PlayerPokemonName];
+        foreach (SpawnedPokemon pokemon in _spawnedDittos.Where(pokemon => pokemon.IsFollowingPlayer && pokemon.IsClaimed))
+        {
+            party.Add(pokemon.Name);
+        }
+
+        return party;
     }
 
     // Handles leave Active Dungeon Run for this gameplay subsystem.
@@ -2073,6 +2114,16 @@ public sealed partial class FarmGame
 
         string dungeonName = _activeDungeonRun.DungeonName;
         _activeDungeonRun = null;
+        _dungeonPokemon.Clear();
+        _activeDungeonMoveAnimations.Clear();
+        _activeDungeonProjectiles.Clear();
+        _dungeonMoveCooldownRemaining = 0f;
+        _dungeonProjectileCooldownRemaining = 0f;
+        _dungeonPartyPokemonNames.Clear();
+        _dungeonPartyCurrentPp.Clear();
+        _dungeonPartyMaxPp.Clear();
+        _activeDungeonPartyIndex = 0;
+        _dungeonSwapLockRemaining = 0f;
         _inputMode = InputMode.Gameplay;
         _interactTarget = null;
         _talkTargetIndex = -1;
